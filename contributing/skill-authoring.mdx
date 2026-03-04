@@ -1,0 +1,384 @@
+---
+title: Skill Authoring Guide
+description: Detailed guide for creating effective Claude Code skills
+---
+
+## Overview
+
+Skills provide Claude with domain-specific knowledge and workflows. This guide covers everything you need to know to create high-quality skills.
+
+## Frontmatter Requirements
+
+Every `SKILL.md` file must start with YAML frontmatter:
+
+```yaml
+---
+name: skill-name              # kebab-case, max 64 chars
+description: "Third-person description of what it does and when to use it"
+allowed-tools:                # Optional: restrict to needed tools only
+  - Read
+  - Grep
+---
+```
+
+### Name Requirements
+
+- **Format**: kebab-case only
+- **Length**: Maximum 64 characters
+- **Preferred form**: Gerund (verb + -ing)
+  - Good: `analyzing-contracts`, `processing-pdfs`
+  - Avoid: `contract-analyzer`, `pdf-processor`
+- **Avoid vague names**: `helper`, `utils`, `tools`, `misc`
+- **Avoid reserved words**: `anthropic`, `claude`
+
+### Description Requirements
+
+Your description must trigger correctly since skills compete with 100+ others:
+
+<Warning>
+The description is critical for skill discovery. Claude uses it to decide when to invoke your skill.
+</Warning>
+
+**Best practices:**
+
+- **Third-person voice**: "Analyzes X" not "I help with X"
+- **Include triggers**: "Use when auditing Solidity" not just "Smart contract tool"
+- **Be specific**: "Detects reentrancy vulnerabilities" not "Helps with security"
+
+**Examples:**
+
+<CodeGroup>
+
+```yaml Good
+---
+name: constant-time-analysis
+description: "Detects timing side-channel vulnerabilities in cryptographic code. Use when implementing or reviewing crypto code, encountering division on secrets, secret-dependent branches, or constant-time programming questions."
+---
+```
+
+```yaml Bad
+---
+name: crypto-helper
+description: "Helps with cryptographic code"
+---
+```
+
+</CodeGroup>
+
+### Allowed Tools (Optional)
+
+Restrict the skill to only the tools it needs:
+
+```yaml
+---
+name: read-only-analyzer
+description: "Analyzes code without making changes"
+allowed-tools:
+  - Read
+  - Grep
+  - Glob
+---
+```
+
+Available tools include: `Read`, `Write`, `Edit`, `Bash`, `Grep`, `Glob`, `Task`, and others.
+
+## Required Sections
+
+Every `SKILL.md` must include these sections:
+
+### When to Use
+
+Specify concrete scenarios where the skill applies:
+
+```markdown
+## When to Use
+
+- User implements signature, encryption, or key derivation
+- Code contains `/` or `%` operators on secret-derived values
+- User mentions "constant-time", "timing attack", "side-channel"
+- Reviewing functions named `sign`, `verify`, `encrypt`, `decrypt`
+```
+
+<Note>
+Make triggers concrete and specific. Think about what keywords or patterns should activate your skill.
+</Note>
+
+### When NOT to Use
+
+Specify scenarios where another approach is better:
+
+```markdown
+## When NOT to Use
+
+- Non-cryptographic code (business logic, UI, etc.)
+- Public data processing where timing leaks don't matter
+- High-level API usage where timing is handled by the library
+```
+
+This helps Claude avoid false positive skill invocations.
+
+### Security Skills: Rationalizations to Reject
+
+For audit/security skills, also include:
+
+```markdown
+## Rationalizations to Reject
+
+- "This code is internal-only" - Internal attackers exist
+- "Performance matters more" - Security is non-negotiable for crypto
+- "The compiler will optimize it" - Never rely on compiler optimizations for security
+```
+
+This section helps Claude maintain rigor and avoid common shortcuts that lead to missed findings.
+
+## Content Organization
+
+<Steps>
+  <Step title="Keep SKILL.md under 500 lines">
+    If your skill grows beyond 500 lines, split it into supporting files:
+    - `references/` - Detailed documentation
+    - `workflows/` - Step-by-step guides
+    - `scripts/` - Utility scripts
+  </Step>
+
+  <Step title="Use progressive disclosure">
+    Start with quick start, then link to details:
+
+    ```markdown
+    ## Quick Start
+    [Core instructions here]
+
+    ## Advanced Usage
+    See [ADVANCED.md](references/ADVANCED.md) for detailed patterns.
+
+    ## API Reference
+    See [API.md](references/API.md) for complete method documentation.
+    ```
+  </Step>
+
+  <Step title="Keep references one level deep">
+    SKILL.md can link to files, but those files shouldn't chain to more files:
+
+    - ✅ Good: `SKILL.md → file1.md` (one level)
+    - ❌ Bad: `SKILL.md → file1.md → file2.md` (chained references)
+
+    <Note>
+    Directory depth is fine (`references/guides/topic.md`). The restriction is on *reference chains*, not nested folders.
+    </Note>
+  </Step>
+</Steps>
+
+## Path Handling
+
+<Warning>
+Never hardcode absolute paths. Always use `{baseDir}` for portability.
+</Warning>
+
+**Good:**
+```bash
+uv run {baseDir}/scripts/process.py input.pdf
+```
+
+**Bad:**
+```bash
+uv run /Users/yourname/plugins/myplugin/scripts/process.py input.pdf
+```
+
+**Rules:**
+- Use `{baseDir}` for paths relative to the skill directory
+- Use forward slashes (`/`) even on Windows
+- Claude will automatically replace `{baseDir}` with the actual path at runtime
+
+## Python Scripts
+
+When skills include Python scripts with dependencies:
+
+<Steps>
+  <Step title="Use PEP 723 inline metadata">
+    Declare dependencies in the script header:
+
+    ```python
+    # /// script
+    # requires-python = ">=3.11"
+    # dependencies = ["requests>=2.28", "pydantic>=2.0"]
+    # ///
+
+    import requests
+    from pydantic import BaseModel
+
+    # Your script code here
+    ```
+  </Step>
+
+  <Step title="Use uv run for execution">
+    This enables automatic dependency resolution:
+
+    ```bash
+    uv run {baseDir}/scripts/process.py input.pdf
+    ```
+
+    No need for separate `pip install` or virtual environment setup!
+  </Step>
+
+  <Step title="Include pyproject.toml">
+    Keep in `scripts/` for development tooling (ruff, pytest, etc.):
+
+    ```toml
+    [project]
+    name = "my-skill-scripts"
+    version = "1.0.0"
+    requires-python = ">=3.11"
+
+    [tool.ruff]
+    line-length = 100
+    ```
+  </Step>
+</Steps>
+
+<Steps>
+  <Step title="Document system dependencies">
+    List non-Python dependencies in workflows with platform-specific install commands for macOS (brew), Ubuntu (apt-get), and other platforms.
+  </Step>
+</Steps>
+
+## Writing Effective Workflows
+
+Workflows should provide step-by-step guidance for complex tasks:
+
+### Scope Boundaries
+
+Match prescriptiveness to task risk:
+
+- **Strict for fragile tasks**: Security audits, crypto implementations, compliance checks need rigid step-by-step enforcement
+- **Flexible for variable tasks**: Code exploration, documentation, refactoring can offer options and judgment calls
+
+### Workflow Format
+
+```markdown
+## Workflow
+
+### 1) Decide whether the request is underspecified
+
+Treat a request as underspecified if after exploring how to perform the work:
+- Define the objective (what should change vs stay the same)
+- Define "done" (acceptance criteria, examples, edge cases)
+- Define scope (which files/components/users are in/out)
+
+### 2) Ask must-have questions first
+
+Ask 1-5 questions in the first pass. Prefer questions that eliminate whole branches of work.
+
+Make questions easy to answer:
+- Optimize for scannability (short, numbered questions)
+- Offer multiple-choice options when possible
+- Suggest reasonable defaults
+
+### 3) Pause before acting
+
+Until must-have answers arrive:
+- Do not run commands or edit files
+- Do perform clearly labeled, low-risk discovery steps
+```
+
+## Value-Add: Behavioral Guidance Over Reference Dumps
+
+Skills should provide guidance Claude doesn't already have:
+
+<Warning>
+Don't paste entire specs. Teach when and how to look things up.
+</Warning>
+
+**Behavioral guidance over reference dumps:**
+- Don't paste entire specs; teach when and how to look things up
+- Explain WHY, not just WHAT
+- Include trade-offs, decision criteria, judgment calls
+- Document anti-patterns WITH explanations
+
+**Example:**
+
+The DWARF skill doesn't include the full DWARF spec. Instead, it teaches Claude:
+- How to use `dwarfdump`, `readelf`, and `pyelftools` to look up what it needs
+- Judgment about when each tool is appropriate
+- What patterns indicate problems vs normal behavior
+
+## Examples and Concreteness
+
+Make examples concrete with actual input → output:
+
+<CodeGroup>
+
+```markdown Good
+## Example: Detecting Timing Leaks
+
+Input code:
+\`\`\`c
+int compare_secret(const char *a, const char *b, size_t len) {
+    for (size_t i = 0; i < len; i++) {
+        if (a[i] != b[i]) return 0;  // Early exit leaks position
+    }
+    return 1;
+}
+\`\`\`
+
+Analysis output:
+\`\`\`
+Line 3: TIMING LEAK - early return on first mismatch
+  Impact: Leaks secret position through execution time
+  Fix: Use constant-time comparison (e.g., memcmp_ct)
+\`\`\`
+```
+
+```markdown Bad
+## Example
+
+The tool analyzes code and finds problems. It will tell you what's wrong.
+```
+
+</CodeGroup>
+
+## Decision Criteria and Trade-offs
+
+Help Claude make judgment calls:
+
+```markdown
+## When to Use Strict Mode vs Permissive Mode
+
+**Use strict mode when:**
+- Auditing third-party code
+- Reviewing cryptographic implementations
+- Compliance-critical code
+
+**Use permissive mode when:**
+- Exploring unfamiliar codebases
+- Quick sanity checks
+- Internal utility code
+
+**Trade-off:** Strict mode has higher false positive rate but catches more edge cases.
+```
+
+## Testing Your Skill
+
+Before submitting:
+
+1. **Test triggering**: Does the description cause the skill to load at the right times?
+2. **Test workflows**: Do the step-by-step instructions work as expected?
+3. **Test scripts**: Do all scripts run successfully with `uv run`?
+4. **Test references**: Do all referenced files exist and load correctly?
+5. **Test paths**: Does `{baseDir}` resolve correctly across different systems?
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Best Practices" icon="star" href="/contributing/best-practices">
+    Learn Trail of Bits quality standards
+  </Card>
+  <Card title="Plugin Structure" icon="folder-tree" href="/contributing/plugin-structure">
+    Understand required directory layout
+  </Card>
+  <Card title="Examples" icon="code" href="/contributing/examples">
+    See real-world skill examples
+  </Card>
+  <Card title="Getting Started" icon="rocket" href="/contributing/getting-started">
+    Start creating your first skill
+  </Card>
+</CardGroup>

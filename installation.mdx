@@ -1,0 +1,109 @@
+---
+title: Installation
+description: Add the Trail of Bits Skills marketplace to Claude Code
+---
+
+## Add the Marketplace
+
+To install the Trail of Bits Skills marketplace, run this command in Claude Code:
+
+```bash
+/plugin marketplace add trailofbits/skills
+```
+
+That's it! The marketplace is now available in your Claude Code environment.
+
+<Note>
+  This adds the marketplace itself, not individual plugins. After adding the marketplace, you'll browse and install specific plugins as needed.
+</Note>
+
+## What Happens Next?
+
+Once you've added the marketplace:
+
+1. **Browse available plugins** - Use `/plugin menu` to see all 40+ available plugins
+2. **Install plugins** - Select and install plugins that match your workflow
+3. **Start using skills** - Invoke skills, commands, and agents from installed plugins
+
+<Steps>
+  <Step title="Verify Installation">
+    Run `/plugin menu` to confirm the marketplace was added successfully. You should see plugins from Trail of Bits available for installation.
+  </Step>
+  
+  <Step title="Choose Your First Plugin">
+    Browse the available plugins and select one that matches your current needs. See the [Quick Start guide](/quickstart) for recommendations.
+  </Step>
+  
+  <Step title="Install and Use">
+    Install your chosen plugin and start using its skills, commands, and agents immediately.
+  </Step>
+</Steps>
+
+## Local Development Installation
+
+If you're developing plugins or testing local changes, you can add the marketplace from a local directory.
+
+<Warning>
+  This is for plugin developers only. Most users should use the standard installation method above.
+</Warning>
+
+### Prerequisites
+
+- Clone the Trail of Bits Skills repository
+- Navigate to the **parent directory** of the repository
+
+### Installation Steps
+
+```bash
+# Navigate to the parent directory
+cd /path/to/parent  # e.g., if repo is at ~/projects/skills, be in ~/projects
+
+# Add the local marketplace
+/plugins marketplace add ./skills
+```
+
+<Note>
+  Note the different command: `/plugins` (plural) is used for local development, while `/plugin` (singular) is used for remote marketplaces.
+</Note>
+
+## System Requirements
+
+Trail of Bits Skills marketplace works with:
+
+- **Claude Code** - Any recent version
+- **Operating Systems** - Linux, macOS, Windows
+- **No additional dependencies** - Individual plugins may require specific tools (noted in their documentation)
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Command not recognized">
+    Ensure you're running the command in Claude Code, not a regular terminal. The `/plugin` command is a Claude Code-specific command.
+  </Accordion>
+
+  <Accordion title="Marketplace not appearing in menu">
+    Try refreshing Claude Code or restarting the application. The marketplace should appear within a few seconds of adding it.
+  </Accordion>
+
+  <Accordion title="Cannot find specific plugin">
+    Make sure you've added the marketplace first using `/plugin marketplace add trailofbits/skills`. Individual plugins won't be visible until the marketplace is added.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quick Start Guide" icon="rocket" href="/quickstart">
+    Learn how to browse and install your first plugin
+  </Card>
+  
+  <Card title="Browse All Plugins" icon="grid" href="/plugins">
+    Explore the full catalog of 40+ plugins
+  </Card>
+</CardGroup>
+
+## Need Help?
+
+- **GitHub Issues** - [Report issues or request features](https://github.com/trailofbits/skills/issues)
+- **Contributing** - See [CLAUDE.md](https://github.com/trailofbits/skills/blob/main/CLAUDE.md) for authoring guidelines
+- **Trail of Bits** - [Visit our website](https://www.trailofbits.com/) for more security resources

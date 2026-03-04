@@ -1,0 +1,368 @@
+---
+title: Spec-to-Code Compliance
+description: Evidence-based alignment analysis between specifications and blockchain implementations
+icon: check-double
+---
+
+Verify that code implements exactly what documentation specifies through deterministic, evidence-based alignment analysis. Designed for blockchain audits where spec-to-code divergence can lead to critical vulnerabilities.
+
+## Overview
+
+The Spec-to-Code Compliance plugin performs systematic comparison between specification documents (whitepapers, design docs) and actual implementation code, producing audit-grade compliance reports with:
+
+- **Zero speculation** - Every claim backed by exact quotes or line numbers
+- **Structured IR workflow** - Spec Intent → Code Behavior → Alignment → Divergence
+- **Confidence scoring** - All mappings include 0-1 confidence scores
+- **Exploit scenarios** - Critical findings include attack vectors and economic impact
+
+<Warning>
+This plugin is designed for **blockchain audits** where formal specifications exist. It requires both specification documents AND corresponding implementation code.
+</Warning>
+
+## When to Use
+
+<CardGroup cols={2}>
+  <Card title="Protocol Audits" icon="magnifying-glass-chart">
+    Smart contracts being verified against whitepapers or protocol specifications
+  </Card>
+  <Card title="Compliance Checks" icon="clipboard-check">
+    Finding gaps between intended behavior and actual implementation
+  </Card>
+  <Card title="Spec Divergence" icon="code-compare">
+    Identifying undocumented code behavior or unimplemented spec claims
+  </Card>
+  <Card title="Documentation Drift" icon="file-circle-xmark">
+    Discovering where code has evolved beyond original design documents
+  </Card>
+</CardGroup>
+
+### Concrete Triggers
+
+- User provides both specification documents AND codebase
+- Questions like "does this code match the spec?" or "what's missing from the implementation?"
+- Audit engagements requiring spec-to-code alignment analysis
+- Protocol implementations being verified against whitepapers
+
+## When NOT to Use
+
+<Warning>
+Do NOT use this plugin for:
+
+- Codebases without corresponding specification documents
+- General code review or vulnerability hunting (use other audit plugins)
+- Writing or improving documentation (this only verifies compliance)
+- Non-blockchain projects without formal specifications
+</Warning>
+
+## Analysis Workflow
+
+The plugin executes a rigorous 7-phase workflow:
+
+<Steps>
+  <Step title="Documentation Discovery">
+    Identifies all spec sources (whitepapers, READMEs, design notes, Notion exports, meeting transcripts)
+  </Step>
+  
+  <Step title="Format Normalization">
+    Converts PDF, Markdown, DOCX, HTML, TXT to clean canonical format preserving structure
+  </Step>
+  
+  <Step title="Spec Intent IR">
+    Extracts all intended behavior (invariants, formulas, flows, security requirements) into structured Spec-IR
+  </Step>
+  
+  <Step title="Code Behavior IR">
+    Line-by-line semantic analysis of implementation producing Code-IR with full traceability
+  </Step>
+  
+  <Step title="Alignment IR">
+    Compares Spec-IR to Code-IR, generates alignment records with match types and confidence scores
+  </Step>
+  
+  <Step title="Divergence Classification">
+    Categorizes misalignments by severity (Critical/High/Medium/Low) with exploit scenarios
+  </Step>
+  
+  <Step title="Final Report">
+    Produces audit-grade compliance report with evidence links and remediation guidance
+  </Step>
+</Steps>
+
+## Match Types
+
+The plugin classifies spec-to-code alignment into six categories:
+
+| Match Type | Description | Example |
+|------------|-------------|----------|
+| `full_match` | Code exactly implements spec | Spec says "revert if balance < amount", code has exact check |
+| `partial_match` | Incomplete implementation | Spec requires 3 checks, code implements 2 |
+| `mismatch` | Spec says X, code does Y | Spec says "use safe math", code uses unchecked arithmetic |
+| `missing_in_code` | Spec claim not implemented | Spec documents access control, code has none |
+| `code_stronger_than_spec` | Code adds behavior beyond spec | Code has reentrancy guard not in spec |
+| `code_weaker_than_spec` | Code misses requirements | Spec requires signature verification, code skips it |
+
+## Severity Classification
+
+<Tabs>
+  <Tab title="Critical">
+    **Indicators:**
+    - Spec says X, code does Y
+    - Missing invariant enabling exploits
+    - Math divergence involving funds
+    - Trust boundary mismatches
+    
+    **Example:**
+    ```solidity
+    // Spec: "Transfer must revert if balance insufficient"
+    // Code: Transfers without balance check (critical vulnerability)
+    ```
+  </Tab>
+  
+  <Tab title="High">
+    **Indicators:**
+    - Partial/incorrect implementation
+    - Access control misalignment
+    - Dangerous undocumented behavior
+    
+    **Example:**
+    ```solidity
+    // Spec: "Only owner can withdraw"
+    // Code: Missing onlyOwner modifier (high severity)
+    ```
+  </Tab>
+  
+  <Tab title="Medium">
+    **Indicators:**
+    - Ambiguity with security implications
+    - Missing revert checks
+    - Incomplete edge-case handling
+    
+    **Example:**
+    ```solidity
+    // Spec: "Handle zero address"
+    // Code: No zero address check (medium severity)
+    ```
+  </Tab>
+  
+  <Tab title="Low">
+    **Indicators:**
+    - Documentation drift
+    - Minor semantics mismatch
+    - Non-security divergence
+    
+    **Example:**
+    ```solidity
+    // Spec: "Emit Transfer event"
+    // Code: Event name is TransferExecuted (low severity)
+    ```
+  </Tab>
+</Tabs>
+
+## IR Structure Examples
+
+### Spec-IR Record
+
+```yaml
+spec_id: SPEC-001
+spec_excerpt: "The swap function must verify that outputAmount >= minOutput before executing the trade"
+source_section: "Section 3.2: Slippage Protection"
+semantic_type: precondition
+normalized_intent:
+  function: swap
+  precondition: "outputAmount >= minOutput"
+  enforcement: "must revert if violated"
+confidence: 0.95
+```
+
+### Code-IR Record
+
+```yaml
+code_id: CODE-001
+file: contracts/DEX.sol
+lines: 142-145
+function: swap
+semantic_type: precondition_check
+code_excerpt: |
+  require(outputAmount >= minOutput, "Slippage exceeded");
+behavior:
+  check: "outputAmount >= minOutput"
+  action_on_violation: revert
+  error_message: "Slippage exceeded"
+```
+
+### Alignment Record
+
+```yaml
+alignment_id: ALIGN-001
+spec_id: SPEC-001
+code_id: CODE-001
+match_type: full_match
+confidence: 0.98
+reasoning: |
+  Spec requires "outputAmount >= minOutput" precondition with revert.
+  Code implements exact check with require statement.
+  Error message provides user-friendly context.
+evidence:
+  spec_quote: "must verify that outputAmount >= minOutput before executing"
+  code_location: "contracts/DEX.sol:142-145"
+```
+
+### Divergence Finding (Critical)
+
+```yaml
+finding_id: DIV-CRIT-001
+severity: critical
+match_type: missing_in_code
+spec_requirement: |
+  Section 4.1: "All external calls must update state before calling
+  external contracts to prevent reentrancy attacks"
+code_behavior: |
+  contracts/Vault.sol:78-82 - withdraw() makes external call before
+  updating user balance, enabling reentrancy
+exploit_scenario: |
+  Attacker can recursively call withdraw() before balance is updated,
+  draining vault funds:
+  1. Attacker calls withdraw(100)
+  2. Line 80: vault.transfer(msg.sender, amount)
+  3. Attacker's fallback calls withdraw(100) again
+  4. Balance still shows 100, transfer succeeds
+  5. Repeat until vault drained
+economic_impact: "Complete loss of vault funds (~$2M TVL)"
+remediation: |
+  Update state before external call (checks-effects-interactions pattern):
+  balances[msg.sender] -= amount;  // Move before transfer
+  vault.transfer(msg.sender, amount);
+confidence: 0.95
+```
+
+## Anti-Hallucination Requirements
+
+<Warning>
+**Zero-speculation rules enforced throughout analysis:**
+
+- If spec is silent: classify as **UNDOCUMENTED**
+- If code adds behavior: classify as **UNDOCUMENTED CODE PATH**
+- If unclear: classify as **AMBIGUOUS**
+- Every claim must quote original text or line numbers
+- No inference from prior knowledge of protocols
+</Warning>
+
+## Rationalizations to Reject
+
+The plugin rejects these common shortcuts:
+
+| Rationalization | Why It's Wrong | Required Action |
+|-----------------|----------------|------------------|
+| "Spec is clear enough" | Ambiguity hides in plain sight | Extract to IR, classify ambiguity explicitly |
+| "Code obviously matches" | Obvious matches have subtle divergences | Document match_type with evidence |
+| "I'll note this as partial match" | Partial = potential vulnerability | Investigate until full_match or mismatch |
+| "This undocumented behavior is fine" | Undocumented = untested = risky | Classify as UNDOCUMENTED CODE PATH |
+| "Low confidence is okay here" | Low confidence findings get ignored | Investigate until confidence ≥ 0.8 or classify as AMBIGUOUS |
+| "I'll infer what the spec meant" | Inference = hallucination | Quote exact text or mark UNDOCUMENTED |
+
+## Output Report Structure
+
+The final compliance report includes:
+
+1. **Executive Summary** - Finding counts, overall compliance metrics
+2. **Documentation Sources** - All spec documents analyzed
+3. **Spec Intent Breakdown** - Extracted Spec-IR with full citations
+4. **Code Behavior Summary** - Code-IR semantic map
+5. **Full Alignment Matrix** - Every spec item mapped to code status
+6. **Divergence Findings** - Critical/High/Medium/Low with evidence
+7. **Missing Invariants** - Spec requirements not implemented
+8. **Incorrect Logic** - Code behavior contradicting spec
+9. **Math Inconsistencies** - Formula divergence
+10. **Flow Mismatches** - State machine divergence
+11. **Access Control Drift** - Permission misalignment
+12. **Undocumented Behavior** - Code paths not in spec
+13. **Ambiguity Hotspots** - Unclear spec or code sections
+14. **Recommendations** - Remediation guidance
+15. **Documentation Updates** - Suggested spec improvements
+16. **Final Risk Assessment** - Overall compliance rating
+
+## Quality Standards
+
+<AccordionGroup>
+  <Accordion title="Spec-IR Completeness">
+    - All invariants extracted and normalized
+    - All formulas in canonical symbolic form
+    - All security requirements documented
+    - Minimum 80% confidence on critical items
+  </Accordion>
+  
+  <Accordion title="Code-IR Completeness">
+    - Every function analyzed with control flow
+    - All state changes tracked
+    - All external calls documented
+    - Line numbers for all evidence
+  </Accordion>
+  
+  <Accordion title="Alignment Quality">
+    - Every spec item has alignment record
+    - Match types accurately classified
+    - Confidence scores justified
+    - Evidence links verified
+  </Accordion>
+  
+  <Accordion title="Divergence Findings">
+    - Exploit scenarios for critical issues
+    - Economic impact analysis
+    - Remediation with code examples
+    - Citations to both spec and code
+  </Accordion>
+</AccordionGroup>
+
+## Agent Usage
+
+The `spec-compliance-checker` agent performs the full 7-phase workflow autonomously:
+
+```bash
+# Invoke the agent directly
+"Use the spec-compliance-checker agent to verify this codebase against the whitepaper."
+```
+
+The agent produces:
+- Structured IR artifacts (Spec-IR, Code-IR, Alignment-IR)
+- Divergence findings with severity classification
+- Final compliance report in markdown format
+
+## Example Use Cases
+
+<CardGroup cols={2}>
+  <Card title="DeFi Protocol Audit" icon="coins">
+    Whitepaper specifies constant product formula `x * y = k`. Code uses `x * y = k + fee`, enabling economic exploit.
+  </Card>
+  
+  <Card title="Governance Compliance" icon="landmark">
+    Spec requires 7-day timelock on proposals. Code implements 3-day timelock, violating governance security model.
+  </Card>
+  
+  <Card title="Access Control Gap" icon="lock">
+    Documentation describes admin-only emergency pause. Implementation missing `onlyAdmin` modifier.
+  </Card>
+  
+  <Card title="Undocumented Upgrade" icon="code-branch">
+    Code implements proxy upgrade pattern not mentioned in specification, introducing trust assumptions.
+  </Card>
+</CardGroup>
+
+## Related Resources
+
+The plugin includes detailed reference documentation:
+
+- `resources/IR_EXAMPLES.md` - Complete IR workflow examples with DEX patterns
+- `resources/OUTPUT_REQUIREMENTS.md` - IR production standards and quality thresholds
+- `resources/COMPLETENESS_CHECKLIST.md` - Verification checklist for all phases
+
+## Integration Points
+
+- **Property-Based Testing** - Verify extracted invariants hold in practice
+- **Zeroize Audit** - Cross-check sensitive data handling against spec
+- **Constant-Time Analysis** - Validate timing requirements from spec
+
+<Note>
+**Author:** Omar Inuwa (Trail of Bits)
+
+**Version:** 1.1.0
+</Note>

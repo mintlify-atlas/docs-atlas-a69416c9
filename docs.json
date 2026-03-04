@@ -1,122 +1,143 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Trail of Bits Skills",
+  "theme": "aspen",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#E74C3C",
+    "light": "#F39C12",
+    "dark": "#C0392B"
   },
-  "favicon": "/favicon.svg",
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/trailofbits/skills"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/trailofbits/skills"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
             "pages": [
-              "index",
-              "quickstart",
-              "development"
+              "introduction",
+              "installation",
+              "quickstart"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Core Concepts",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "concepts/plugins",
+              "concepts/skills",
+              "concepts/commands",
+              "concepts/agents"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Smart Contract Security",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "plugins/building-secure-contracts",
+              "plugins/entry-point-analyzer"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Code Auditing",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "plugins/agentic-actions-auditor",
+              "plugins/audit-context-building",
+              "plugins/differential-review",
+              "plugins/fp-check",
+              "plugins/insecure-defaults",
+              "plugins/sharp-edges",
+              "plugins/static-analysis",
+              "plugins/supply-chain-risk-auditor",
+              "plugins/variant-analysis"
+            ]
+          },
+          {
+            "group": "Static Analysis Tools",
+            "pages": [
+              "plugins/semgrep-rule-creator",
+              "plugins/semgrep-rule-variant-creator",
+              "plugins/yara-authoring"
+            ]
+          },
+          {
+            "group": "Verification & Testing",
+            "pages": [
+              "plugins/constant-time-analysis",
+              "plugins/property-based-testing",
+              "plugins/spec-to-code-compliance",
+              "plugins/testing-handbook-skills",
+              "plugins/zeroize-audit"
+            ]
+          },
+          {
+            "group": "Specialized Tools",
+            "pages": [
+              "plugins/burpsuite-project-parser",
+              "plugins/dwarf-expert",
+              "plugins/firebase-apk-scanner"
+            ]
+          },
+          {
+            "group": "Development",
+            "pages": [
+              "plugins/ask-questions-if-underspecified",
+              "plugins/devcontainer-setup",
+              "plugins/gh-cli",
+              "plugins/git-cleanup",
+              "plugins/modern-python",
+              "plugins/second-opinion",
+              "plugins/skill-improver",
+              "plugins/workflow-skill-design"
+            ]
+          },
+          {
+            "group": "Infrastructure & Tools",
+            "pages": [
+              "plugins/claude-in-chrome-troubleshooting",
+              "plugins/debug-buttercup",
+              "plugins/seatbelt-sandboxer"
+            ]
+          },
+          {
+            "group": "Other",
+            "pages": [
+              "plugins/culture-index",
+              "plugins/let-fate-decide"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "Contributing",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Development",
             "pages": [
-              "api-reference/introduction"
+              "contributing/getting-started",
+              "contributing/skill-authoring",
+              "contributing/best-practices",
+              "contributing/plugin-structure"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Reference",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "contributing/examples",
+              "contributing/trophy-case"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

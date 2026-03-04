@@ -1,0 +1,322 @@
+---
+title: Skill Improver
+description: Iteratively review and fix Claude Code skills until they meet quality standards
+icon: arrows-rotate
+---
+
+<Info>
+Automatically reviews and fixes Claude Code skills through iterative refinement cycles using the skill-reviewer agent. Continues until quality bar is met or max iterations reached.
+</Info>
+
+## Overview
+
+The Skill Improver plugin runs automated fix-review cycles on Claude Code skills until they meet quality standards. It uses the `skill-reviewer` agent from the `plugin-dev` plugin to identify issues, then fixes them and re-reviews iteratively.
+
+**Author:** Paweł Płatek
+
+## Prerequisites
+
+<Warning>
+Requires the **`plugin-dev`** plugin which provides the `skill-reviewer` agent.
+</Warning>
+
+Verify it's enabled:
+```bash
+/plugins
+```
+
+If `plugin-dev` is missing, install from the Trail of Bits plugin repository.
+
+## Commands
+
+### /skill-improver \<SKILL_PATH\> [--max-iterations N]
+
+Start an improvement loop for a skill:
+
+```bash
+/skill-improver ./plugins/my-plugin/skills/my-skill
+/skill-improver ./skills/my-skill/SKILL.md --max-iterations 15
+```
+
+**Arguments:**
+- `<SKILL_PATH>` - Path to skill directory or SKILL.md file
+- `--max-iterations N` - Maximum iterations (default: 20)
+
+### /cancel-skill-improver [SESSION_ID]
+
+Stop the active improvement loop:
+
+```bash
+/cancel-skill-improver
+```
+
+Changes made during the loop are preserved.
+
+## How It Works
+
+<Steps>
+  <Step title="Start Loop">
+    `/skill-improver` resolves the skill path and creates a session state file in `.claude/`
+  </Step>
+  
+  <Step title="Review Phase">
+    Calls the `skill-reviewer` agent to identify quality issues, categorized by severity:
+    - **Critical** - Blocks skill loading or causes runtime failures
+    - **Major** - Significantly degrades skill effectiveness
+    - **Minor** - Polish items, may be false positives
+  </Step>
+  
+  <Step title="Fix Phase">
+    - **Critical issues** - Fixed immediately (always valid)
+    - **Major issues** - Fixed immediately (required by standards)
+    - **Minor issues** - Evaluated before fixing (may be false positives)
+  </Step>
+  
+  <Step title="Re-review">
+    Runs skill-reviewer again to verify fixes worked and catch any new issues
+  </Step>
+  
+  <Step title="Repeat or Complete">
+    Continues until:
+    - Quality bar is met (outputs `<skill-improvement-complete>`)
+    - Max iterations reached (default: 20)
+  </Step>
+</Steps>
+
+## Issue Categorization
+
+### Critical Issues (MUST fix immediately)
+
+These block skill loading or cause runtime failures:
+
+<CardGroup cols={2}>
+  <Card title="Missing Frontmatter" icon="exclamation-triangle">
+    Missing `name` or `description` fields - Claude cannot index or trigger the skill
+  </Card>
+  
+  <Card title="Invalid YAML" icon="code">
+    Frontmatter syntax errors - Parsing fails, skill won't load
+  </Card>
+  
+  <Card title="Broken References" icon="link-slash">
+    Referenced files don't exist - Runtime errors when Claude follows links
+  </Card>
+  
+  <Card title="Broken Paths" icon="file-slash">
+    Invalid file paths - Tool failures at runtime
+  </Card>
+</CardGroup>
+
+### Major Issues (MUST fix)
+
+These significantly degrade skill effectiveness:
+
+- **Weak trigger descriptions** - Claude may not recognize when to use the skill
+- **Wrong writing voice** - Second person "you" instead of imperative
+- **SKILL.md exceeds 500 lines** - Should use `references/` for details
+- **Missing "When to Use"** - Required by project standards
+- **Missing "When NOT to Use"** - Required by project standards
+- **Description doesn't specify when to trigger** - Skill may never be selected
+
+### Minor Issues (Evaluate before fixing)
+
+These are polish items that may or may not improve the skill:
+
+- Subjective style preferences
+- Optional enhancements
+- "Nice to have" improvements
+- Formatting suggestions
+
+<Note>
+**Evaluate minor issues before fixing.** Ask:
+
+1. Is this a genuine improvement?
+2. Could this be a false positive?
+3. Would this actually help Claude use the skill?
+
+Only implement minor fixes that are clearly beneficial.
+</Note>
+
+## Installation
+
+```bash
+/plugin install trailofbits/skills/plugins/skill-improver
+```
+
+## Usage Example
+
+<Steps>
+  <Step title="Start Improvement Loop">
+    ```text
+    /skill-improver ./plugins/my-plugin/skills/my-skill
+    ```
+  </Step>
+  
+  <Step title="Iteration 1 - Review">
+    ```markdown
+    ## Skill Review Results
+    
+    Critical Issues:
+    - SKILL.md:1 - Missing required 'name' field in frontmatter
+    
+    Major Issues:
+    - SKILL.md:3 - Description uses second person ("you should use")
+    - Missing "When NOT to Use" section
+    
+    Minor Issues:
+    - Line 45 is verbose
+    ```
+  </Step>
+  
+  <Step title="Iteration 1 - Fix">
+    Claude fixes critical and major issues:
+    - Adds `name` field to frontmatter
+    - Rewrites description in third person
+    - Adds "When NOT to Use" section
+    - Evaluates minor issue: "Line 45 is verbose"
+      - Decision: Verbosity provides useful context, skip
+  </Step>
+  
+  <Step title="Iteration 2 - Re-review">
+    ```markdown
+    ## Skill Review Results
+    
+    Minor Issues:
+    - Line 45 is verbose
+    ```
+  </Step>
+  
+  <Step title="Iteration 2 - Evaluate">
+    Claude evaluates minor issue again:
+    - Line 45 communicates effectively as-is
+    - Verbosity provides useful context
+    - No change needed
+  </Step>
+  
+  <Step title="Complete">
+    All critical/major issues resolved. Claude outputs:
+    
+    ```text
+    <skill-improvement-complete>
+    ```
+    
+    Loop terminates successfully.
+  </Step>
+</Steps>
+
+## Completion Criteria
+
+<Warning>
+**CRITICAL:** The stop hook ONLY checks for the explicit marker `<skill-improvement-complete>`. No other signal will terminate the loop.
+</Warning>
+
+### When to Output the Marker
+
+<Checklist>
+  - [ ] skill-reviewer reports "Pass" or no issues found → output marker immediately
+  - [ ] All critical and major issues are fixed AND verified → output marker
+  - [ ] Remaining issues are only minor AND evaluated as false positives → output marker
+</Checklist>
+
+### When NOT to Output the Marker
+
+- Any critical issue remains unfixed
+- Any major issue remains unfixed
+- Haven't run skill-reviewer to verify fixes worked
+
+## Multiple Sessions
+
+Multiple improvement loops can run simultaneously on different skills. Each gets:
+
+- Unique session ID
+- Separate state file in `.claude/skill-improver.*.local.md`
+- Independent iteration tracking
+
+View active sessions:
+```bash
+ls .claude/skill-improver.*.local.md
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="subagent not found">
+    Install the `plugin-dev` plugin:
+    
+    ```bash
+    /plugin install plugin-dev
+    ```
+  </Accordion>
+  
+  <Accordion title="Loop never completes">
+    Check state:
+    
+    ```bash
+    cat .claude/skill-improver.*.local.md
+    ```
+    
+    Cancel manually:
+    
+    ```bash
+    /cancel-skill-improver
+    ```
+  </Accordion>
+  
+  <Accordion title="Orphaned state files">
+    Remove orphaned state files:
+    
+    ```bash
+    trash .claude/skill-improver.*.local.md
+    ```
+  </Accordion>
+  
+  <Accordion title="Max iterations reached">
+    The default limit is 20 iterations. If reached:
+    
+    1. Review remaining issues in state file
+    2. Manually fix complex issues
+    3. Restart loop with higher limit:
+    
+    ```bash
+    /skill-improver ./skills/my-skill --max-iterations 30
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Rationalizations to Reject
+
+<Warning>
+The skill teaches Claude to reject these shortcuts:
+
+| Rationalization | Why It's Wrong |
+|-----------------|----------------|
+| "I'll just mark it complete and come back later" | Fix issues now, don't defer |
+| "This minor issue seems wrong, I'll skip all of them" | Evaluate each individually |
+| "The reviewer is being too strict" | Quality bar exists for a reason |
+| "It's good enough" | If there are major issues, it's not good enough |
+</Warning>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Fix Critical First" icon="1">
+    Always address critical issues immediately - they block skill loading.
+  </Card>
+  
+  <Card title="Verify Major Fixes" icon="2">
+    Run skill-reviewer again after fixing major issues to ensure they're resolved.
+  </Card>
+  
+  <Card title="Evaluate Minors" icon="3">
+    Don't blindly fix minor issues - evaluate for false positives.
+  </Card>
+  
+  <Card title="Output Marker" icon="4">
+    Always output `<skill-improvement-complete>` when done - it's the ONLY way to stop the loop.
+  </Card>
+</CardGroup>
+
+## Related Skills
+
+- **Workflow Skill Design** - Teaches skill architecture patterns
+- **Ask Questions If Underspecified** - Uses similar iterative refinement approach

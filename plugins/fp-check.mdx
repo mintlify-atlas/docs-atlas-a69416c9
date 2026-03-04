@@ -1,0 +1,353 @@
+---
+title: FP Check
+description: Systematic false positive verification for security bug analysis with mandatory gate reviews
+---
+
+A systematic false positive verification plugin that enforces rigorous per-bug verification when analyzing suspected security vulnerabilities. Each bug receives a **TRUE POSITIVE** or **FALSE POSITIVE** verdict with documented evidence.
+
+## Overview
+
+When Claude is asked to verify suspected security bugs, this plugin activates a rigorous verification process. Bugs are routed through one of two paths based on complexity, and both paths end with six mandatory gate reviews before any verdict.
+
+<Info>
+**Author:** Maciej Domanski  
+**Version:** 1.0.0
+</Info>
+
+<Warning>
+This plugin is for **verification** of suspected bugs, not for **finding** bugs. It activates when asked "Is this bug real?" not "Find bugs in this code."
+</Warning>
+
+## Verification Paths
+
+The plugin routes each bug based on complexity:
+
+<CardGroup cols={2}>
+  <Card title="Standard Verification" icon="list-check">
+    Linear single-pass checklist for straightforward bugs. No task creation overhead.
+  </Card>
+  <Card title="Deep Verification" icon="sitemap">
+    Full task-based orchestration with parallel sub-phases for complex bugs.
+  </Card>
+</CardGroup>
+
+### Standard Path
+
+Use when **ALL** of these hold:
+
+- Clear, specific vulnerability claim (not vague or ambiguous)
+- Single component — no cross-component interaction
+- Well-understood bug class (buffer overflow, SQL injection, XSS, etc.)
+- No concurrency or async involved
+- Straightforward data flow from source to sink
+
+**Process:**
+1. Data flow tracing
+2. Exploitability proof
+3. Impact assessment
+4. PoC sketch (pseudocode)
+5. Devil's advocate spot-check (7 questions)
+6. Gate review (6 mandatory gates)
+
+Standard verification escalates to deep at two checkpoints if complexity warrants it.
+
+### Deep Path
+
+Use when **ANY** of these hold:
+
+- Ambiguous claim with multiple interpretations
+- Cross-component bug path (data flows through 3+ modules)
+- Race conditions, TOCTOU, or concurrency
+- Logic bugs without a clear spec to verify against
+- Standard verification was inconclusive
+- User explicitly requests full verification
+
+**Process:**
+1. Claim analysis and bug class classification
+2. Context extraction (execution, caller, architectural, historical)
+3. **Phase 1:** Data flow analysis (trust boundaries, API contracts, environment protections)
+4. **Phase 2:** Exploitability verification (attacker control, bounds proofs, race proofs)
+5. **Phase 3:** Impact assessment (real security impact vs operational robustness)
+6. **Phase 4:** PoC creation (pseudocode, executable, unit test, negative PoC)
+7. **Phase 5:** Devil's advocate review (13 questions with LLM self-check)
+8. **Gate reviews:** Six mandatory gates before any verdict
+
+## Components
+
+### Skills
+
+| Skill | Description |
+|-------|-------------|
+| [fp-check](skills/fp-check/SKILL.md) | Main verification skill with routing logic and gate reviews |
+
+### Agents
+
+| Agent | Phases | Description |
+|-------|--------|-------------|
+| **data-flow-analyzer** | 1.1–1.4 | Traces data flow from source to sink, maps trust boundaries, checks API contracts and environment protections |
+| **exploitability-verifier** | 2.1–2.4 | Proves attacker control, creates mathematical bounds proofs, assesses race condition feasibility |
+| **poc-builder** | 4.1–4.5 | Creates pseudocode, executable, unit test, and negative PoCs |
+
+### Hooks
+
+| Hook | Event | Purpose |
+|------|-------|---------|
+| Verification completeness | Stop | Blocks the agent from stopping until all bugs have completed all 5 phases, gate reviews, and verdicts |
+| Agent output completeness | SubagentStop | Blocks agents from stopping until they produce complete structured output |
+
+## Installation
+
+```bash
+/plugin install fp-check
+```
+
+## Triggers
+
+The skill activates when the user asks to verify a suspected bug:
+
+- "Is this bug real?" / "Is this a true positive?"
+- "Is this a false positive?" / "Verify this finding"
+- "Check if this vulnerability is exploitable"
+
+<Note>
+The skill does **not** activate for bug hunting ("find bugs", "security analysis", "audit code").
+</Note>
+
+## Step 0: Understand the Claim
+
+Before any analysis, restate the bug in your own words. If you cannot, ask for clarification.
+
+**Document:**
+
+- **Exact vulnerability claim:** e.g., "heap buffer overflow in `parse_header()` when `content_length` exceeds 4096"
+- **Alleged root cause:** e.g., "missing bounds check before `memcpy` at line 142"
+- **Supposed trigger:** e.g., "attacker sends HTTP request with oversized Content-Length header"
+- **Claimed impact:** e.g., "remote code execution via controlled heap corruption"
+- **Threat model:** What privilege level? Is it sandboxed? What can the attacker already do?
+- **Bug class:** Memory corruption, injection, logic bug, race condition, etc.
+- **Execution context:** When and how is this code path reached?
+- **Caller analysis:** What functions call this code and what constraints do they impose?
+- **Historical context:** Any recent changes, known issues, or previous security reviews?
+
+<Tip>
+Half of false positives collapse at this step — the claim doesn't make coherent sense when restated precisely.
+</Tip>
+
+## Standard Verification Workflow
+
+### Step 1: Data Flow
+
+Trace data from source to the alleged vulnerability sink.
+
+- Map trust boundaries crossed (internal/trusted vs external/untrusted)
+- Identify all validation and sanitization between source and sink
+- Check API contracts — many APIs have built-in bounds protection
+- Check for environmental protections (compiler, runtime, OS, framework)
+
+<Warning>
+**Key pitfall:** Analyzing the vulnerable code in isolation. Conditional logic upstream may make the vulnerability mathematically unreachable. Trace the full validation chain.
+</Warning>
+
+**Escalation check:** If you found 3+ trust boundaries, callbacks/async control flow, or an ambiguous validation chain → escalate to deep verification.
+
+### Step 2: Exploitability
+
+Prove the attacker can trigger the vulnerability.
+
+- **Attacker control:** Prove the attacker controls data reaching the vulnerable operation
+- **Bounds proof:** For integer/bounds issues, create an explicit algebraic proof
+- **Race feasibility:** For race conditions, prove concurrent access is actually possible
+
+### Step 3: Impact
+
+Determine whether exploitation has real security consequences.
+
+- Distinguish real security impact (RCE, privesc, info disclosure) from operational robustness issues (crash recovery)
+- Distinguish primary security controls from defense-in-depth
+
+### Step 4: PoC Sketch
+
+Create a pseudocode PoC showing the attack path:
+
+```
+Data Flow: [Source] → [Validation?] → [Transform?] → [Vulnerable Op] → [Impact]
+Attacker controls: [what input, how]
+Trigger: [pseudocode showing the exploit path]
+```
+
+### Step 5: Devil's Advocate Spot-Check
+
+Answer these 7 questions. If any produces genuine uncertainty, escalate to deep verification.
+
+**Against the vulnerability:**
+
+1. Am I seeing a vulnerability because the pattern "looks dangerous" rather than because it actually is?
+2. Am I incorrectly assuming attacker control over trusted data?
+3. Have I rigorously proven the mathematical condition for vulnerability can occur?
+4. Am I confusing defense-in-depth failure with a primary security vulnerability?
+5. Am I hallucinating this vulnerability? LLMs are biased toward seeing bugs everywhere.
+
+**For the vulnerability (false-negative protection):**
+
+6. Am I dismissing a real vulnerability because the exploit seems complex or unlikely?
+7. Am I inventing mitigations or validation logic that I haven't verified in the actual source code?
+
+### Step 6: Gate Review
+
+Apply all six gates before any verdict:
+
+<Steps>
+  <Step title="Gate 1: Attacker Control">
+    Is the input actually attacker-controlled?
+  </Step>
+  <Step title="Gate 2: Reachability">
+    Can the vulnerable code path be reached?
+  </Step>
+  <Step title="Gate 3: Validation">
+    Does upstream validation prevent the issue?
+  </Step>
+  <Step title="Gate 4: API Contract">
+    Does the API have built-in protections?
+  </Step>
+  <Step title="Gate 5: Environment">
+    Do compiler/runtime/OS protections prevent exploitation?
+  </Step>
+  <Step title="Gate 6: Impact">
+    Does exploitation have real security consequences?
+  </Step>
+</Steps>
+
+## Example: True Positive
+
+**Claim:** Buffer overflow in `parse_header()` when `content_length` exceeds 4096
+
+```c
+void parse_header(char* header) {
+    char buffer[4096];
+    int content_length = atoi(get_header_value(header, "Content-Length"));
+    memcpy(buffer, header, content_length);  // Line 142
+}
+```
+
+**Verification:**
+
+**Step 1: Data Flow**
+- Source: HTTP request header (attacker-controlled)
+- Sink: `memcpy()` at line 142
+- Trust boundary: External network → internal buffer
+- Validation: None found between `atoi()` and `memcpy()`
+- API contract: `memcpy()` has no bounds protection (memcpy_s would prevent this)
+
+**Step 2: Exploitability**
+- Attacker control: YES — attacker sends HTTP header with `Content-Length: 10000`
+- Bounds proof: `content_length = 10000`, `sizeof(buffer) = 4096`, `10000 > 4096` → overflow confirmed
+- No upstream validation prevents large values
+
+**Step 3: Impact**
+- Real security impact: YES — heap buffer overflow enables RCE
+- Not defense-in-depth: This is a primary boundary
+
+**Step 4: PoC**
+```
+Send HTTP request:
+POST / HTTP/1.1
+Content-Length: 10000
+
+[10000 bytes of data]
+
+→ content_length = 10000
+→ memcpy(buffer[4096], header, 10000)
+→ 5904 byte overflow
+→ heap corruption
+→ RCE
+```
+
+**Step 5: Devil's Advocate**
+1. Pattern bias? NO — mathematically proven overflow
+2. Trust assumption? NO — HTTP headers are attacker-controlled
+3. Math proof? YES — explicit bounds proof above
+4. Defense-in-depth? NO — primary boundary
+5. Hallucination? NO — code analysis confirmed
+
+**Step 6: Gate Review**
+- Gate 1 (Control): PASS — attacker controls Content-Length header
+- Gate 2 (Reachability): PASS — any HTTP POST triggers this path
+- Gate 3 (Validation): FAIL — no validation, vulnerability confirmed
+- Gate 4 (API): FAIL — memcpy() has no bounds protection
+- Gate 5 (Environment): FAIL — no compiler/OS protection for this pattern
+- Gate 6 (Impact): PASS — RCE is real security impact
+
+**Verdict:** **TRUE POSITIVE** — Buffer overflow in parse_header() enables remote code execution
+
+## Example: False Positive
+
+**Claim:** SQL injection in `get_user()` when username contains single quotes
+
+```python
+def get_user(username):
+    query = "SELECT * FROM users WHERE username = ?"
+    return db.execute(query, (username,))
+```
+
+**Verification:**
+
+**Step 1: Data Flow**
+- Source: User-supplied username (attacker-controlled)
+- Sink: `db.execute()` 
+- Validation: None visible in this function
+- API contract: **Parameterized query** — `?` placeholder with separate parameters
+
+**Step 2: Exploitability**
+- Attacker control: YES — attacker can provide any username
+- BUT: API contract check reveals parameterized queries prevent injection
+- The `?` placeholder and separate `(username,)` tuple mean the database driver escapes the value
+
+**Step 3: Impact**
+- No exploitation possible due to API protection
+
+**Gate Review:**
+- Gate 1 (Control): PASS — attacker controls username
+- Gate 2 (Reachability): PASS — code is called on every login
+- Gate 3 (Validation): PASS — no explicit validation needed
+- Gate 4 (API): **PASS** — Parameterized queries prevent SQL injection by design
+- Gate 5 (Environment): PASS — database driver escapes parameters
+- Gate 6 (Impact): N/A — no exploitation possible
+
+**Verdict:** **FALSE POSITIVE** — Parameterized queries prevent SQL injection. This is secure code.
+
+## Rationalizations to Reject
+
+<Warning>
+If you catch yourself thinking any of these, STOP and return to the verification checklist.
+</Warning>
+
+| Rationalization | Why It's Wrong | Required Action |
+|---|---|---|
+| "Rapid analysis of remaining bugs" | Every bug gets full verification | Return to task list, verify next bug through all phases |
+| "This pattern looks dangerous, so it's a vulnerability" | Pattern recognition is not analysis | Complete data flow tracing before any conclusion |
+| "Skipping full verification for efficiency" | No partial analysis allowed | Execute all steps per the chosen verification path |
+| "The code looks unsafe, reporting without tracing data flow" | Unsafe-looking code may have upstream validation | Trace the complete path from source to sink |
+| "Similar code was vulnerable elsewhere" | Each context has different validation | Verify this specific instance independently |
+| "This is clearly critical" | LLMs are biased toward seeing bugs | Complete devil's advocate review; prove it with evidence |
+
+## Batch Triage
+
+When verifying multiple bugs at once:
+
+1. Run Step 0 for all bugs first — restating each claim often collapses obvious false positives immediately
+2. Route each bug independently (some may be standard, others deep)
+3. Process all standard-routed bugs first, then deep-routed bugs
+4. After all bugs are verified, check for **exploit chains** — findings that individually failed may combine to form a viable attack
+
+## Final Summary
+
+After processing all suspected bugs, provide:
+
+1. **Counts:** X TRUE POSITIVES, Y FALSE POSITIVES
+2. **TRUE POSITIVE list:** Each with brief vulnerability description
+3. **FALSE POSITIVE list:** Each with brief reason for rejection
+
+## Related Skills
+
+- [Audit Context Building](/plugins/audit-context-building) - Deep context helps verification
+- [Differential Review](/plugins/differential-review) - May discover bugs requiring verification

@@ -1,0 +1,376 @@
+---
+title: Workflow Skill Design
+description: Design patterns and review for workflow-based Claude Code skills
+icon: diagram-project
+---
+
+<Info>
+Teaches design patterns for building workflow-based Claude Code skills with multi-step phases, decision trees, subagent delegation, and progressive disclosure. Includes a review agent for auditing existing skills.
+</Info>
+
+## Overview
+
+The Workflow Skill Design plugin provides comprehensive guidance for designing, structuring, and reviewing workflow-based Claude Code skills. It teaches five core patterns and includes a review agent for quality auditing.
+
+**Author:** Benjamin Samuels
+
+## Components
+
+### Skills
+
+- **designing-workflow-skills** - Guides the design and structuring of workflow-based skills with multi-step phases, decision trees, subagent delegation, and progressive disclosure
+
+### Agents
+
+- **workflow-skill-reviewer** - Reviews workflow-based skills for structural quality, pattern adherence, tool assignment correctness, and anti-pattern detection. Produces graded audit report.
+
+## Five Workflow Patterns
+
+| Pattern | Use When | Key Feature |
+|---------|----------|-------------|
+| **Routing** | Multiple independent tasks from shared intake | Routing table maps intent to workflow files |
+| **Sequential Pipeline** | Dependent steps, each feeding the next | Auto-detection may resume from partial progress |
+| **Linear Progression** | Single path, same every time | Numbered phases with entry/exit criteria |
+| **Safety Gate** | Destructive/irreversible actions | Two confirmation gates before execution |
+| **Task-Driven** | Complex dependencies, partial failure tolerance | TaskCreate/TaskUpdate with dependency tracking |
+
+## When to Use
+
+- Designing a new skill with multi-step workflows or phased execution
+- Creating a skill that routes between multiple independent tasks
+- Building a skill with safety gates (destructive actions requiring confirmation)
+- Structuring a skill that uses subagents or task tracking
+- Reviewing or refactoring an existing workflow skill for quality
+- Deciding how to split content between SKILL.md, references/, and workflows/
+
+## Installation
+
+```bash
+/plugin install trailofbits/skills:workflow-skill-design
+```
+
+## Essential Principles
+
+### 1. Description is the Trigger
+
+<Warning>
+**The `description` field is the ONLY thing that controls when a skill activates.**
+</Warning>
+
+Claude decides whether to load a skill based solely on its frontmatter `description`. The body of SKILL.md (including "When to Use" and "When NOT to Use" sections) is only read AFTER the skill is already active.
+
+**Put in description:**
+- Trigger keywords
+- Use cases
+- Exclusions
+
+**"When to Use" and "When NOT to Use" still matter:**
+- They scope Claude's behavior once active
+- "When NOT to Use" should name specific alternatives: "use Semgrep for simple pattern matching" not "not for simple tasks"
+
+### 2. Numbered Phases
+
+<Warning>
+**Phases must be numbered with entry and exit criteria.**
+</Warning>
+
+Unnumbered prose instructions produce unreliable execution order. Every phase needs:
+
+- A number (Phase 1, Phase 2, ...)
+- Entry criteria (what must be true before starting)
+- Numbered actions (what to do)
+- Exit criteria (how to know it's done)
+
+### 3. Tools Match Executor
+
+**Skills use `allowed-tools:` in frontmatter**
+
+**Agents use `tools:` in frontmatter**
+
+Never list tools the component doesn't use. Never use Bash for operations that have dedicated tools (Glob, Grep, Read, Write, Edit).
+
+<Note>
+Most skills and agents should include `TodoRead` and `TodoWrite` in their tool list - these enable progress tracking during multi-step execution.
+</Note>
+
+### 4. Progressive Disclosure
+
+**SKILL.md stays under 500 lines.**
+
+It contains only what Claude needs for every invocation:
+- Principles
+- Routing
+- Quick references
+- Links
+
+Detailed patterns go in `references/`. Step-by-step processes go in `workflows/`. One level deep - no reference chains.
+
+### 5. Scalable Tool Patterns
+
+<Warning>
+**Instructions must produce tool-calling patterns that scale.**
+</Warning>
+
+Every workflow instruction becomes tool calls at runtime.
+
+**Apply the 10,000-file test:**
+- Mentally run the workflow against a large repo
+- Check that tool call count stays bounded
+
+**Anti-patterns:**
+- Searching N files for M patterns → N×M calls (bad)
+- One subagent per file → unbounded spawning (bad)
+
+**Better:**
+- Combine into one regex, grep once, then filter (good)
+- Batch items into groups, one subagent per batch (good)
+
+### 6. Degrees of Freedom
+
+**Match instruction specificity to task fragility:**
+
+<Tabs>
+  <Tab title="Low Freedom">
+    **Use for:** Fragile operations (database migrations, crypto, destructive actions)
+    
+    **Format:** Exact commands, no variation
+    
+    ```text
+    Run exactly this script:
+    ```bash
+    python migrate.py --confirm
+    ```
+    ```
+  </Tab>
+  
+  <Tab title="Medium Freedom">
+    **Use for:** Preferred patterns where variation is acceptable
+    
+    **Format:** Pseudocode with parameters
+    
+    ```text
+    Use this template and customize as needed:
+    1. Read {baseDir}/config.json
+    2. Extract the 'api' section
+    3. Validate against schema
+    ```
+  </Tab>
+  
+  <Tab title="High Freedom">
+    **Use for:** Variable tasks (code review, exploration, documentation)
+    
+    **Format:** Heuristics and judgment
+    
+    ```text
+    Analyze the structure and suggest improvements.
+    Consider:
+    - Modularity and coupling
+    - Test coverage gaps
+    - Documentation completeness
+    ```
+  </Tab>
+</Tabs>
+
+## Pattern Selection
+
+Choose the right pattern for your skill's structure:
+
+```text
+How many distinct paths does the skill have?
+│
++-- One path, always the same
+│   +-- Does it perform destructive actions?
+│       +-- YES -> Safety Gate Pattern
+│       +-- NO  -> Linear Progression Pattern
+│
++-- Multiple independent paths from shared setup
+│   +-- Routing Pattern
+│
++-- Multiple dependent steps in sequence
+    +-- Do steps have complex dependencies?
+        +-- YES -> Task-Driven Pattern
+        +-- NO  -> Sequential Pipeline Pattern
+```
+
+## Designing a New Skill
+
+<Steps>
+  <Step title="Define Scope and Goals">
+    - What problem does this skill solve?
+    - What are the expected inputs?
+    - What are the expected outputs?
+    - When should this skill activate?
+  </Step>
+  
+  <Step title="Choose Pattern">
+    Use the pattern selection decision tree above.
+  </Step>
+  
+  <Step title="Map Phases">
+    Number all phases with:
+    - Entry criteria
+    - Numbered actions
+    - Exit criteria
+  </Step>
+  
+  <Step title="Assign Tools">
+    - List minimum tools needed
+    - Use dedicated tools (Glob, Grep, Read) over Bash
+    - Include TodoRead/TodoWrite for progress tracking
+  </Step>
+  
+  <Step title="Split Content">
+    - SKILL.md: Principles, routing, quick refs (under 500 lines)
+    - references/: Detailed patterns
+    - workflows/: Step-by-step processes
+  </Step>
+  
+  <Step title="Write Description">
+    Put trigger keywords, use cases, and exclusions in frontmatter description.
+  </Step>
+</Steps>
+
+## Reviewing an Existing Skill
+
+The `workflow-skill-reviewer` agent can audit any skill:
+
+```text
+Review the skill at plugins/my-plugin/skills/my-skill/ for quality issues.
+```
+
+The agent produces a graded audit report:
+
+- **Structural quality** - Phases numbered? Entry/exit criteria?
+- **Pattern adherence** - Matches a recognized pattern?
+- **Tool assignment** - Tools match executor? Minimum needed?
+- **Anti-pattern detection** - Hardcoded paths? Reference chains?
+
+## Anti-Pattern Quick Reference
+
+The most common mistakes:
+
+| AP | Anti-Pattern | One-Line Fix |
+|----|-------------|-------------|
+| AP-1 | Missing goals/anti-goals | Add When to Use AND When NOT to Use sections |
+| AP-2 | Monolithic SKILL.md (>500 lines) | Split into references/ and workflows/ |
+| AP-3 | Reference chains (A → B → C) | All files one hop from SKILL.md |
+| AP-4 | Hardcoded paths | Use `{baseDir}` for all internal paths |
+| AP-6 | Unnumbered phases | Number every phase with entry/exit criteria |
+| AP-7 | Missing exit criteria | Define what "done" means for every phase |
+| AP-11 | Wrong tool for the job | Use Glob/Grep/Read, not Bash equivalents |
+| AP-12 | Overprivileged tools | Remove tools not actually used |
+| AP-18 | Cartesian product tool calls | Combine patterns into single regex, grep once |
+| AP-19 | Unbounded subagent spawning | Batch items into groups, one subagent per batch |
+| AP-20 | Description summarizes workflow | Description = triggering conditions only |
+
+## Structural Anatomy
+
+Every workflow skill needs this skeleton:
+
+```markdown
+---
+name: kebab-case-name
+description: "Third-person description with trigger keywords"
+allowed-tools:
+  - [minimum tools needed]
+# Optional fields:
+# disable-model-invocation: true    # Only user can invoke
+# user-invocable: false             # Only Claude can invoke
+# context: fork                     # Run in isolated subagent
+# agent: Explore                    # Subagent type
+---
+
+# Title
+
+## Essential Principles
+[3-5 non-negotiable rules with WHY explanations]
+
+## When to Use
+[4-6 specific scenarios]
+
+## When NOT to Use
+[3-5 scenarios with named alternatives]
+
+## [Pattern-Specific Section]
+[Routing table / Pipeline steps / Phase list / Gates]
+
+## Quick Reference
+[Compact tables for frequently-needed info]
+
+## Reference Index
+[Links to all supporting files]
+
+## Success Criteria
+[Checklist for output validation]
+```
+
+## Tool Assignment Quick Reference
+
+| Component Type | Typical Tools |
+|---------------|---------------|
+| Read-only analysis skill | Read, Glob, Grep, TodoRead, TodoWrite |
+| Interactive analysis skill | Read, Glob, Grep, AskUserQuestion, TodoRead, TodoWrite |
+| Code generation skill | Read, Glob, Grep, Write, Bash, TodoRead, TodoWrite |
+| Pipeline skill | Read, Write, Glob, Grep, Bash, AskUserQuestion, Task, TaskCreate, TaskList, TaskUpdate, TodoRead, TodoWrite |
+| Read-only agent | Read, Grep, Glob, TodoRead, TodoWrite |
+| Action agent | Read, Grep, Glob, Write, Bash, TodoRead, TodoWrite |
+
+**Key rules:**
+- Use Glob (not `find`), Grep (not `grep`), Read (not `cat`)
+- Skills use `allowed-tools:` — agents use `tools:`
+- List only tools that instructions actually reference
+- Read-only components should never have Write or Bash
+
+## Reference Documentation
+
+The skill includes detailed reference files:
+
+- **workflow-patterns.md** - 5 patterns with structural skeletons and examples
+- **anti-patterns.md** - 20 anti-patterns with before/after fixes
+- **tool-assignment-guide.md** - Tool selection matrix, component comparison, subagent guidance
+- **progressive-disclosure-guide.md** - Content splitting rules, the 500-line rule, sizing guidelines
+
+**Workflows:**
+- **design-a-workflow-skill.md** - 6-phase creation process from scope to self-review
+- **review-checklist.md** - Structured self-review checklist for submission readiness
+
+## Success Criteria
+
+A well-designed workflow skill:
+
+<Checklist>
+  - [ ] Has When to Use AND When NOT to Use sections
+  - [ ] Uses a recognizable pattern (routing, pipeline, linear, safety gate, or task-driven)
+  - [ ] Numbers all phases with entry and exit criteria
+  - [ ] Lists only the tools it actually uses (least privilege)
+  - [ ] Keeps SKILL.md under 500 lines with details in references/workflows
+  - [ ] Has no hardcoded paths (uses `{baseDir}`)
+  - [ ] Has no broken file references
+  - [ ] Has no reference chains (all links one hop from SKILL.md)
+  - [ ] Includes a verification step at the end of the workflow
+  - [ ] Has a description that triggers correctly (third-person, specific keywords)
+  - [ ] Includes concrete examples for key instructions
+  - [ ] Explains WHY, not just WHAT, for essential principles
+</Checklist>
+
+## Rationalizations to Reject
+
+<Warning>
+When designing workflow skills, reject these shortcuts:
+
+| Rationalization | Why It's Wrong |
+|-----------------|----------------|
+| "It's obvious which phase comes next" | LLMs don't infer ordering from prose. Number the phases. |
+| "Exit criteria are implied" | Implied criteria are skipped criteria. Write them explicitly. |
+| "One big SKILL.md is simpler" | Simpler to write, worse to execute. Claude loses focus past 500 lines. |
+| "The description doesn't matter much" | The description is how the skill gets triggered. Bad description = wrong/missed activations. |
+| "Bash can do everything" | Bash file operations are fragile. Dedicated tools handle encoding/permissions better. |
+| "The LLM will figure out the tools" | It will guess wrong. Specify exactly which tool for each operation. |
+</Warning>
+
+## Related Skills
+
+- **Skill Improver** - Uses workflow patterns for iterative refinement
+- **Git Cleanup** - Example of Safety Gate pattern
+- **Devcontainer Setup** - Example of Linear Progression pattern
+- **Ask Questions If Underspecified** - Example of minimal gated workflow

@@ -1,0 +1,512 @@
+---
+title: Best Practices
+description: Trail of Bits quality standards for skill development
+---
+
+## Overview
+
+These are Trail of Bits house standards on top of Anthropic's requirements. Following these practices ensures your skills are discoverable, maintainable, and effective.
+
+## Description Quality
+
+Your skill competes with 100+ others. The description must trigger correctly.
+
+### Third-Person Voice
+
+<CodeGroup>
+
+```yaml Good
+description: "Analyzes smart contracts for reentrancy vulnerabilities"
+```
+
+```yaml Bad
+description: "I help you analyze smart contracts"
+```
+
+</CodeGroup>
+
+Claude reads descriptions to decide which skills to invoke. Third-person descriptions integrate better with this selection process.
+
+### Include Trigger Keywords
+
+<CodeGroup>
+
+```yaml Good
+description: "Detects timing side-channel vulnerabilities in cryptographic code. Use when implementing or reviewing crypto code, encountering division on secrets, or constant-time programming questions."
+```
+
+```yaml Bad
+description: "Smart contract security tool"
+```
+
+</CodeGroup>
+
+**Why it matters:** Specific triggers increase the chances Claude will invoke your skill at the right time.
+
+### Be Specific About Capabilities
+
+<CodeGroup>
+
+```yaml Good
+description: "Detects reentrancy vulnerabilities in Solidity, Vyper, and Cairo smart contracts using static analysis patterns"
+```
+
+```yaml Bad
+description: "Helps with security"
+```
+
+</CodeGroup>
+
+## Value-Add: Behavioral Guidance Over Reference Dumps
+
+Skills should provide guidance Claude doesn't already have, not duplicate reference material.
+
+### Teach How to Look Things Up
+
+<Warning>
+Don't paste entire specs. Teach when and how to look things up.
+</Warning>
+
+**Instead of:**
+```markdown
+## DWARF Spec
+
+[10,000 lines of DWARF specification]
+```
+
+**Do this:**
+```markdown
+## Working with DWARF
+
+Use these tools to look up what you need:
+
+- `dwarfdump -debug-info` - Inspect debug info entries
+- `readelf -wi` - Quick overview of debug sections
+- `pyelftools` - Programmatic access for complex analysis
+
+**When to use each:**
+- Use `dwarfdump` for human-readable output
+- Use `readelf` for quick checks
+- Use `pyelftools` when you need to parse or transform data
+```
+
+### Explain WHY, Not Just WHAT
+
+Include trade-offs, decision criteria, and judgment calls:
+
+```markdown
+## Why Constant-Time Matters
+
+**The problem:** Timing variations leak secret information through:
+- Cache access patterns (fast vs slow memory)
+- Branch prediction (taken vs not-taken)
+- Division/modulo (variable-time on most CPUs)
+
+**Why not just optimize later:** Compiler optimizations can introduce timing leaks
+even in code that was originally constant-time. You must verify assembly output.
+
+**Trade-off:** Constant-time code is often slower. This is acceptable for crypto
+where correctness matters more than performance.
+```
+
+### Document Anti-Patterns WITH Explanations
+
+Say why something is wrong, not just that it's wrong:
+
+```markdown
+## Anti-Patterns
+
+### Early Return on Secret Comparison
+
+❌ **Bad:**
+\`\`\`c
+if (secret[i] != input[i]) return 0;  // Early exit
+\`\`\`
+
+**Why it's wrong:** Exit timing reveals position of first mismatch, leaking partial
+secret information. An attacker can measure timing to guess bytes one at a time.
+
+✅ **Good:**
+\`\`\`c
+diff |= secret[i] ^ input[i];  // Accumulate differences
+\`\`\`
+
+**Why it's right:** All bytes are always compared. Timing is independent of where
+mismatches occur.
+```
+
+## Scope Boundaries
+
+Prescriptiveness should match task risk:
+
+### Strict for Fragile Tasks
+
+Security audits, crypto implementations, and compliance checks need rigid step-by-step enforcement:
+
+```markdown
+## Mandatory Steps
+
+You MUST complete all steps in order. Do not skip any step.
+
+### 1) Initial Scan
+Run static analysis: `semgrep --config crypto.yaml`
+
+### 2) Manual Review
+Review all findings. For each:
+- [ ] Verify it's a real issue (not false positive)
+- [ ] Assess severity (critical/high/medium/low)
+- [ ] Document exploit scenario
+
+### 3) Verification
+For each critical finding:
+- [ ] Write proof-of-concept exploit
+- [ ] Verify in test environment
+- [ ] Document mitigation
+```
+
+### Flexible for Variable Tasks
+
+Code exploration, documentation, and refactoring can offer options:
+
+```markdown
+## Exploration Options
+
+Choose the approach that fits your needs:
+
+**Option A: Quick Overview**
+- Scan file structure with `tree`
+- Read entry points and main modules
+- Review README and documentation
+
+**Option B: Deep Dive**
+- Map all dependencies
+- Trace execution paths
+- Analyze data flows
+- Document architecture
+
+**Option C: Targeted Search**
+- Define specific questions
+- Search for relevant code
+- Focus on specific subsystems
+```
+
+## Required Sections
+
+Every SKILL.md must include:
+
+### When to Use
+
+Specific scenarios where this skill applies:
+
+```markdown
+## When to Use
+
+**Concrete triggers:**
+- User implements signature, encryption, or key derivation
+- Code contains `/` or `%` operators on secret-derived values
+- User mentions "constant-time", "timing attack", "side-channel"
+- Reviewing functions named `sign`, `verify`, `encrypt`, `decrypt`
+
+**Flowchart:**
+\`\`\`
+User writing crypto code? ──yes──> Use this skill
+         │
+         no
+         │
+         v
+User asking about timing attacks? ──yes──> Use this skill
+         │
+         no
+         │
+         v
+Skip this skill
+\`\`\`
+```
+
+### When NOT to Use
+
+Scenarios where another approach is better:
+
+```markdown
+## When NOT to Use
+
+- Non-cryptographic code (business logic, UI, etc.)
+- Public data processing where timing leaks don't matter
+- Code that doesn't handle secrets, keys, or authentication tokens
+- High-level API usage where timing is handled by the library
+```
+
+### Security Skills: Rationalizations to Reject
+
+For audit/security skills, include common shortcuts to reject:
+
+```markdown
+## Rationalizations to Reject
+
+These are common shortcuts that lead to missed findings:
+
+- **"This code is internal-only"**
+  - Reject: Internal attackers exist; defense in depth matters
+  
+- **"Performance matters more"**
+  - Reject: Security is non-negotiable for cryptographic code
+  
+- **"The compiler will optimize it"**
+  - Reject: Never rely on compiler optimizations for security properties
+  
+- **"It's too rare to matter"**
+  - Reject: Cryptographic vulnerabilities are often systematic, not edge cases
+```
+
+## Content Organization
+
+### Progressive Disclosure Pattern
+
+Start simple, then provide depth:
+
+```markdown
+## Quick Start
+
+[2-3 paragraphs of core guidance]
+
+For common scenarios, use this command:
+\`\`\`bash
+uv run {baseDir}/scripts/analyze.py --quick file.c
+\`\`\`
+
+## Deep Analysis
+
+See [ADVANCED.md](references/ADVANCED.md) for:
+- Cross-architecture testing
+- Custom rule development
+- Integration with CI/CD
+- False positive reduction
+
+## Language-Specific Guides
+
+- [C/C++](references/compiled.md)
+- [Python](references/python.md)
+- [JavaScript](references/javascript.md)
+```
+
+### Keep SKILL.md Under 500 Lines
+
+Split into supporting files when needed:
+
+```
+skills/
+  my-skill/
+    SKILL.md              # < 500 lines: overview + quick start
+    references/
+      ADVANCED.md         # Detailed usage
+      API.md              # Complete API reference
+      TROUBLESHOOTING.md  # Common issues
+    workflows/
+      audit-workflow.md   # Step-by-step audit process
+      review-workflow.md  # Code review process
+    scripts/
+      analyze.py          # Analysis script
+      report.py           # Report generator
+```
+
+### One Level Deep
+
+<Warning>
+SKILL.md can link to files, but those files shouldn't chain to more files.
+</Warning>
+
+**Good:** `SKILL.md → advanced.md` (one level)
+
+**Bad:** `SKILL.md → advanced.md → expert.md` (chained)
+
+<Note>
+Directory depth is fine (`references/guides/topic.md`). The restriction is on *reference chains*, not nested folders.
+</Note>
+
+## Hooks Best Practices
+
+PreToolUse hooks run on every Bash command—performance is critical.
+
+### Prefer Shell + jq Over Python
+
+```bash
+#!/bin/bash
+# Fast: shell + jq
+command=$(echo "$1" | jq -r '.command')
+if [[ ! "$command" =~ ^python[0-9.]* ]]; then
+    exit 0  # Fast path: most commands exit immediately
+fi
+# Only analyze python commands
+```
+
+**Why:** Interpreter startup (Python + tree-sitter) adds noticeable latency. Shell + jq is instant.
+
+### Fast-Fail Early
+
+Exit immediately for non-matching commands:
+
+```bash
+#!/bin/bash
+command=$(echo "$1" | jq -r '.command')
+
+# Fast-fail: most invocations exit here (instant)
+if [[ ! "$command" =~ git|rm|mv ]]; then
+    exit 0
+fi
+
+# Only proceed for dangerous commands
+```
+
+### Favor Regex Over AST Parsing
+
+Accept rare false positives if performance gain is significant:
+
+```bash
+# Fast but has false positives
+if [[ "$command" =~ python.*\.py ]]; then
+    # Analyze
+fi
+
+# vs.
+
+# Slow but precise
+python -c "import tree_sitter; ..." # Parse AST
+```
+
+**Trade-off:** Regex might trigger on `grep python.py` but Claude can rephrase. The speed gain is worth it.
+
+### Anticipate False Positive Patterns
+
+Don't trigger on diagnostic commands:
+
+```bash
+# Skip diagnostic commands
+if [[ "$command" =~ ^(which|type|command\ -v) ]]; then
+    exit 0
+fi
+
+# Skip search tools
+if [[ "$command" =~ ^(grep|rg|ag|ack) ]]; then
+    exit 0
+fi
+
+# Skip file operations with dangerous terms in filenames
+if [[ "$command" =~ (cat|less|head|tail).*python ]]; then
+    exit 0
+fi
+```
+
+### Document Trade-offs in PRs
+
+Explain deliberate design choices in PR descriptions:
+
+```markdown
+## Performance Considerations
+
+This hook uses regex instead of AST parsing to minimize latency on every Bash command.
+
+**Trade-off:** May have false positives on edge cases like `grep "def " python.txt`,
+but Claude can rephrase. The ~100ms latency reduction is worth it.
+
+**Tested:** No false positives in normal development workflows.
+```
+
+## Examples and Concreteness
+
+### Provide Concrete Input/Output
+
+<CodeGroup>
+
+```markdown Good
+## Example: Detecting Reentrancy
+
+Input:
+\`\`\`solidity
+function withdraw(uint amount) public {
+    require(balances[msg.sender] >= amount);
+    msg.sender.call{value: amount}("");  // External call before state update
+    balances[msg.sender] -= amount;      // State updated after
+}
+\`\`\`
+
+Output:
+\`\`\`
+Line 3: REENTRANCY VULNERABILITY
+  Pattern: External call before state update
+  Impact: Attacker can recursively call withdraw()
+  Fix: Update balances[msg.sender] before external call
+\`\`\`
+```
+
+```markdown Bad
+## Example
+
+Run the tool and it will find issues.
+```
+
+</CodeGroup>
+
+### Show Decision Criteria
+
+Help Claude make judgment calls:
+
+```markdown
+## Choosing Analysis Depth
+
+**Quick scan** - Use when:
+- Initial code review
+- Unfamiliar codebase exploration
+- Time constraints
+
+**Deep analysis** - Use when:
+- Security audit
+- Pre-deployment verification
+- Critical infrastructure
+
+**Trade-off:** Deep analysis takes 10x longer but finds 3x more issues.
+```
+
+## Quality Checklist
+
+Before submitting, verify:
+
+**Description:**
+- [ ] Third-person voice
+- [ ] Includes trigger keywords
+- [ ] Specific about capabilities
+
+**Content:**
+- [ ] Explains WHY, not just WHAT
+- [ ] Includes trade-offs and decision criteria
+- [ ] Documents anti-patterns with explanations
+- [ ] Concrete examples with input/output
+
+**Structure:**
+- [ ] "When to use" section present
+- [ ] "When NOT to use" section present
+- [ ] Security skills have "Rationalizations to reject"
+- [ ] SKILL.md under 500 lines
+- [ ] References are one level deep
+
+**Technical:**
+- [ ] No hardcoded paths (use `{baseDir}`)
+- [ ] Python scripts use PEP 723 metadata
+- [ ] Hooks are performance-optimized
+- [ ] All referenced files exist
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Skill Authoring" icon="book" href="/contributing/skill-authoring">
+    Detailed skill authoring guide
+  </Card>
+  <Card title="Plugin Structure" icon="folder-tree" href="/contributing/plugin-structure">
+    Required directory structure
+  </Card>
+  <Card title="Examples" icon="code" href="/contributing/examples">
+    Real-world skill examples
+  </Card>
+  <Card title="Getting Started" icon="rocket" href="/contributing/getting-started">
+    Start contributing
+  </Card>
+</CardGroup>

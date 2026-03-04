@@ -1,0 +1,210 @@
+---
+title: Let Fate Decide
+description: Draw Tarot cards using cryptographic randomness to guide vague or underspecified planning
+icon: hand-sparkles
+---
+
+<Info>
+**Author:** Scott Arciszewski ([@tob-scott-a](https://github.com/tob-scott-a))
+</Info>
+
+## Overview
+
+A Claude Code skill that draws Tarot cards using `os.urandom()` to inject entropy into vague or underspecified planning decisions. When a prompt is sufficiently ambiguous, or the user explicitly invokes fate, this skill shuffles a full 78-card Tarot deck using cryptographic randomness and draws 4 cards (which may appear reversed). Claude then interprets the spread and uses the reading to inform its approach.
+
+## When to Use
+
+<CardGroup cols={2}>
+  <Card title="Vague Prompts" icon="question">
+    The user's request is ambiguous and multiple valid approaches exist
+  </Card>
+  <Card title="Explicit Invocations" icon="wand-sparkles">
+    "I'm feeling lucky", "let fate decide", "dealer's choice", "surprise me", "whatever you think"
+  </Card>
+  <Card title="Yu-Gi-Oh Energy" icon="cards">
+    "Heart of the cards", "I believe in the heart of the cards", "you've activated my trap card", "it's time to duel"
+  </Card>
+  <Card title="Nonchalant Delegation" icon="hand">
+    The user expresses indifference about the approach
+  </Card>
+  <Card title="Redraw Requests" icon="rotate">
+    "Try again" or "draw again" when no actual system changes occurred (draw new cards, not re-run same approach)
+  </Card>
+  <Card title="Tie-Breaking" icon="scale-balanced">
+    When you genuinely cannot decide between equally valid approaches
+  </Card>
+</CardGroup>
+
+## How It Works
+
+### The Draw
+
+The script uses `os.urandom()` for cryptographic randomness:
+
+<Steps>
+  <Step title="Build Deck">
+    Builds a standard 78-card Tarot deck (22 Major Arcana + 56 Minor Arcana)
+  </Step>
+  <Step title="Shuffle">
+    Performs a Fisher-Yates shuffle using rejection sampling (no modulo bias)
+  </Step>
+  <Step title="Draw Cards">
+    Draws 4 cards from the top
+  </Step>
+  <Step title="Reversals">
+    Each card independently has a 50% chance of being reversed
+  </Step>
+</Steps>
+
+### The Spread
+
+The 4 card positions represent:
+
+| Position | Represents | Question It Answers |
+|----------|-----------|---------------------|
+| **1** | **The Context** | What is the situation really about? |
+| **2** | **The Challenge** | What obstacle or tension exists? |
+| **3** | **The Guidance** | What approach should be taken? |
+| **4** | **The Outcome** | Where does this path lead? |
+
+### Card Organization
+
+Each of the 78 Tarot cards has its own markdown file:
+
+<CardGroup cols={2}>
+  <Card title="Major Arcana" icon="crown">
+    22 cards - The Fool through The World
+    
+    Archetypal forces, major life themes
+  </Card>
+  <Card title="Wands" icon="wand">
+    14 cards - Ace through King
+    
+    Creativity, action, will, passion
+  </Card>
+  <Card title="Cups" icon="droplet">
+    14 cards - Ace through King
+    
+    Emotion, intuition, relationships
+  </Card>
+  <Card title="Swords" icon="sword">
+    14 cards - Ace through King
+    
+    Intellect, conflict, truth, clarity
+  </Card>
+  <Card title="Pentacles" icon="coins">
+    14 cards - Ace through King
+    
+    Material, practical, craft, resources
+  </Card>
+</CardGroup>
+
+## Quick Start
+
+<Steps>
+  <Step title="Run the Drawing Script">
+    ```bash
+    uv run {baseDir}/scripts/draw_cards.py
+    ```
+
+    The script outputs JSON with 4 drawn cards, each with a `file` path relative to `{baseDir}/`
+  </Step>
+  <Step title="Read Card Meanings">
+    Read each card's meaning file to understand the draw
+  </Step>
+  <Step title="Interpret the Spread">
+    Use the interpretation guide at `{baseDir}/references/INTERPRETATION_GUIDE.md`
+
+    Key rules:
+    - Reversed cards invert or complicate the upright meaning
+    - Major Arcana cards carry more weight than Minor Arcana
+    - The spread tells a story across all 4 positions; don't interpret cards in isolation
+    - Map abstract meanings to concrete technical decisions
+  </Step>
+  <Step title="Apply to Task">
+    Apply the interpretation to the task at hand
+  </Step>
+</Steps>
+
+## Example Session
+
+<CodeGroup>
+```text User Prompt
+User: "I dunno, just make it work somehow"
+```
+
+```text Card Draw
+[Draw cards]
+1. The Magician (upright) - Context: All tools are available
+2. Five of Swords (reversed) - Challenge: Let go of a combative approach
+3. The Star (upright) - Guidance: Follow the aspirational path
+4. Ten of Pentacles (upright) - Outcome: Long-term stability
+```
+
+```text Interpretation
+Interpretation: The cards suggest you have everything you need (Magician).
+The challenge is avoiding overengineering or adversarial thinking about edge
+cases (Five of Swords reversed). Follow the clean, hopeful approach (Star)
+and build for lasting maintainability (Ten of Pentacles).
+
+Approach: Implement the simplest correct solution with clear structure,
+prioritizing long-term readability over clever optimizations.
+```
+</CodeGroup>
+
+## When NOT to Use
+
+<Warning>
+- The user has given clear, specific instructions
+- The task has a single obvious correct approach
+- Safety-critical decisions (security, data integrity, production deployments)
+- The user explicitly asks you NOT to use Tarot
+- A more specific skill (like `ask-questions-if-underspecified`) would better serve the user by gathering actual requirements
+</Warning>
+
+## Error Handling
+
+If the drawing script fails:
+
+<AccordionGroup>
+  <Accordion title="Script Crashes with Traceback">
+    Report the error to the user and skip the reading. Do not invent cards or simulate a draw — the whole point is real entropy.
+  </Accordion>
+  <Accordion title="Card File Not Found">
+    Note the missing file, interpret the card from its name and suit alone, and continue with the reading.
+  </Accordion>
+  <Accordion title="Never Fake Entropy">
+    If the script cannot run, do not simulate a draw using your own "randomness." Tell the user the draw failed.
+  </Accordion>
+</AccordionGroup>
+
+## Interpretation Guidelines
+
+<Tip>
+**Key Interpretation Rules:**
+
+- Reversed cards invert or complicate the upright meaning
+- Major Arcana cards carry more weight than Minor Arcana  
+- The spread tells a story across all 4 positions; don't interpret cards in isolation
+- Map abstract meanings to concrete technical decisions
+</Tip>
+
+## Rationalizations to Reject
+
+| Rationalization | Why Wrong |
+|----------------|----------|
+| "The cards said to, so I must" | Cards inform direction, they don't override safety or correctness |
+| "This reading justifies my pre-existing preference" | Be honest if the reading challenges your instinct |
+| "The reversed card means do nothing" | Reversed means a different angle, not inaction |
+| "Major Arcana overrides user requirements" | User requirements always take priority over card readings |
+| "I'll keep drawing until I get what I want" | One draw per decision point; accept the reading |
+
+## Installation
+
+```bash
+/plugin install trailofbits/skills/plugins/let-fate-decide
+```
+
+<Note>
+This plugin is designed to add creative entropy to ambiguous planning situations. It should complement, not replace, thoughtful technical decision-making and user requirements gathering.
+</Note>

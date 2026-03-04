@@ -1,0 +1,327 @@
+---
+title: Entry Point Analyzer
+description: Systematically identify state-changing entry points in smart contracts for security auditing
+---
+
+A specialized skill for systematically identifying **state-changing** entry points in smart contract codebases to guide security audits. This skill helps auditors map the attack surface by finding all externally callable functions that can modify contract state.
+
+## Purpose
+
+When auditing smart contracts, examining each file or function individually is inefficient. Security auditors need to start from **entry points**—the externally callable functions that represent the attack surface. 
+
+This skill automates the identification and classification of state-changing entry points, excluding view/pure/read-only functions that cannot directly cause loss of funds or state corruption.
+
+## Installation
+
+```bash
+/plugin install trailofbits/skills/plugins/entry-point-analyzer
+```
+
+## Supported Languages
+
+<CardGroup cols={2}>
+  <Card title="Solidity" icon="ethereum">
+    `.sol` files with OpenZeppelin and custom modifiers
+  </Card>
+  <Card title="Vyper" icon="python">
+    `.vy` files with native patterns
+  </Card>
+  <Card title="Solana" icon="rust">
+    `.rs` files with Anchor and Native frameworks
+  </Card>
+  <Card title="Move" icon="m">
+    `.move` files for Aptos and Sui
+  </Card>
+  <Card title="TON" icon="t">
+    `.fc`, `.func`, `.tact` files (FunC and Tact)
+  </Card>
+  <Card title="CosmWasm" icon="atom">
+    `.rs` files with cw-ownable and cw-controllers
+  </Card>
+</CardGroup>
+
+## Access Classifications
+
+The skill categorizes entry points into four security-relevant levels:
+
+### 1. Public (Unrestricted)
+
+Callable by anyone without restrictions. These represent the **highest audit priority** as they are accessible to potential attackers.
+
+**Examples:**
+- Token transfers and approvals
+- DEX swaps and liquidity operations
+- Public minting functions
+- Deposit/withdrawal functions
+
+### 2. Role-Restricted
+
+Limited to specific roles like admin, governance, guardian, operator, or custom roles.
+
+**Common Role Patterns:**
+- `onlyOwner`, `onlyAdmin`, `onlyGovernance`
+- `onlyGuardian`, `onlyPauser`
+- `onlyKeeper`, `onlyRelayer`
+- `onlyStrategy`, `strategist`
+- Custom role checks via access control systems
+
+### 3. Review Required
+
+Ambiguous access patterns that need manual verification by an auditor.
+
+**Examples:**
+- Dynamic trust lists: `require(trusted[msg.sender])`
+- Complex conditional access: `require(condition1 && condition2)`
+- State-dependent access control
+- Multi-signature requirements
+
+### 4. Contract-Only
+
+Internal integration points callable only by other contracts, not by externally owned accounts (EOAs).
+
+**Examples:**
+- Callbacks: `onERC721Received`, `uniswapV3SwapCallback`, `flashLoanCallback`
+- Hook implementations
+- Cross-contract integration functions
+- Functions that revert if `tx.origin == msg.sender`
+
+## Scope: State-Changing Functions Only
+
+This skill focuses exclusively on functions that can modify state. **Excluded patterns:**
+
+| Language | Excluded Patterns |
+|----------|-------------------|
+| **Solidity** | `view`, `pure` functions |
+| **Vyper** | `@view`, `@pure` functions |
+| **Solana** | Functions without `mut` account references |
+| **Move** | Non-entry `public fun` (module-callable only) |
+| **TON** | `get` methods (FunC), read-only receivers (Tact) |
+| **CosmWasm** | `query` entry point and its handlers |
+
+<Note>
+**Why exclude read-only functions?** They cannot directly cause loss of funds or state corruption. While they may leak information, the primary audit focus is on functions that can change state.
+</Note>
+
+## Usage
+
+Trigger the skill with requests like:
+
+```bash
+# Analyze entire codebase
+"Analyze the entry points in this codebase"
+
+# Find specific patterns
+"Find all external functions and access levels"
+
+# Generate audit flows
+"List audit flows for src/core/"
+
+# Identify privileged operations
+"What privileged operations exist in this project?"
+```
+
+### Directory Filtering
+
+Specify a subdirectory to limit scope:
+
+```bash
+"Analyze only src/core/"
+"Find entry points in contracts/protocol/"
+```
+
+## Slither Integration
+
+For Solidity codebases, the skill automatically uses [Slither](https://github.com/crytic/slither) when available for more accurate analysis.
+
+### Automatic Detection
+
+The skill will:
+
+1. Check if Slither is installed
+2. Run `slither . --print entry-points` if available
+3. Parse the output table to identify entry points
+4. Supplement with manual analysis for access control classification
+5. Fall back to manual analysis if Slither fails
+
+### Benefits of Slither Integration
+
+- **Faster analysis** - Automated extraction of entry points
+- **More accurate** - Compiler-level understanding of code
+- **Comprehensive** - Captures inherited and complex patterns
+
+## Output Format
+
+The skill generates a structured markdown report with:
+
+### Summary Table
+
+```markdown
+| Category | Count |
+|----------|-------|
+| Public (Unrestricted) | 12 |
+| Role-Restricted | 8 |
+| Restricted (Review Required) | 3 |
+| Contract-Only | 4 |
+| **Total** | **27** |
+```
+
+### Detailed Tables by Category
+
+Each category includes:
+- Function signatures
+- File paths with line numbers (e.g., `Vault.sol:L145`)
+- Access control patterns
+- Role assignments
+- Notes for manual review
+
+### Example Entry
+
+```markdown
+## Role-Restricted Entry Points
+
+### Admin / Owner
+| Function | File | Restriction |
+|----------|------|-------------|
+| `setFee(uint256 newFee)` | `Config.sol:L15` | `onlyOwner` |
+| `upgradeProxy(address impl)` | `Proxy.sol:L89` | `onlyAdmin` |
+```
+
+## Role Detection
+
+The skill infers roles from common patterns:
+
+| Pattern | Detected Role |
+|---------|---------------|
+| `onlyOwner`, `msg.sender == owner` | Owner |
+| `onlyAdmin`, `ADMIN_ROLE` | Admin |
+| `onlyGovernance`, `governance` | Governance |
+| `onlyGuardian`, `onlyPauser` | Guardian |
+| `onlyKeeper`, `onlyRelayer` | Keeper/Relayer |
+| `onlyStrategy`, `strategist` | Strategist |
+| Dynamic checks (`authorized[msg.sender]`) | Review Required |
+
+## Common Role Patterns by Protocol Type
+
+Different protocol types have characteristic role patterns:
+
+| Protocol Type | Common Roles |
+|---------------|--------------|
+| **DEX** | `owner`, `feeManager`, `pairCreator` |
+| **Lending** | `admin`, `guardian`, `liquidator`, `oracle` |
+| **Governance** | `proposer`, `executor`, `canceller`, `timelock` |
+| **NFT** | `minter`, `admin`, `royaltyReceiver` |
+| **Bridge** | `relayer`, `guardian`, `validator`, `operator` |
+| **Vault/Yield** | `strategist`, `keeper`, `harvester`, `manager` |
+
+## Workflow
+
+<Steps>
+  <Step title="Detect Language">
+    Identify contract language(s) from file extensions and syntax patterns
+  </Step>
+  
+  <Step title="Check for Tooling">
+    For Solidity, check if Slither is available and use it for automated extraction
+  </Step>
+  
+  <Step title="Locate Contracts">
+    Find all contract/module files (apply directory filter if specified)
+  </Step>
+  
+  <Step title="Extract Entry Points">
+    Parse each file for externally callable, state-changing functions
+  </Step>
+  
+  <Step title="Classify Access">
+    Categorize each function by access level based on modifiers and checks
+  </Step>
+  
+  <Step title="Generate Report">
+    Output structured markdown report with summary and detailed tables
+  </Step>
+</Steps>
+
+## Example Use Cases
+
+### Starting a Security Audit
+
+```bash
+"Analyze entry points in contracts/"
+```
+
+**Output:** Complete map of the attack surface, prioritized by access level. Start with Public (Unrestricted) functions as they represent the highest risk.
+
+### Reviewing Access Control
+
+```bash
+"Find all privileged operations"
+```
+
+**Output:** Comprehensive list of role-restricted functions, helping verify that critical operations have appropriate access controls.
+
+### Protocol-Specific Analysis
+
+```bash
+"Analyze entry points in src/lending/"
+```
+
+**Output:** Focused analysis of lending protocol components, identifying admin functions, user-facing operations, and integration points.
+
+### Pre-Deployment Checklist
+
+```bash
+"What are all the external state-changing functions?"
+```
+
+**Output:** Complete inventory of functions that could modify state, useful for final security review before deployment.
+
+## Analysis Guidelines
+
+The skill follows rigorous analysis principles:
+
+1. **Be thorough** - Every state-changing externally callable function is analyzed
+2. **Be conservative** - When uncertain about access level, flag for manual review
+3. **Skip read-only** - Exclude `view`, `pure`, and equivalent read-only functions
+4. **Note inheritance** - Track if access control comes from parent contracts
+5. **Track modifiers** - List all access-related modifiers/decorators
+6. **Identify patterns** - Recognize common patterns:
+   - Initializer functions (often unrestricted on first call)
+   - Upgrade functions (high-privilege)
+   - Emergency/pause functions (guardian-level)
+   - Fee/parameter setters (admin-level)
+   - Token transfers and approvals (often public)
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Start Broad" icon="magnifying-glass">
+    Begin with full codebase analysis to understand the complete attack surface
+  </Card>
+  
+  <Card title="Verify Assumptions" icon="check">
+    Don't assume "obvious" admin functions—trace the actual restriction implementation
+  </Card>
+  
+  <Card title="Include Callbacks" icon="link">
+    Callbacks define trust boundaries and must be analyzed
+  </Card>
+  
+  <Card title="Flag Ambiguity" icon="flag">
+    When access control is unclear, mark for manual review rather than guess
+  </Card>
+</CardGroup>
+
+## Related Skills
+
+Complement entry point analysis with:
+
+- **audit-context-building** - Build deep architectural understanding before auditing
+- **building-secure-contracts** - Platform-specific vulnerability scanning
+- **solidity-poc-builder** - Create proof-of-concept exploits for discovered vulnerabilities
+- **issue-writer** - Transform findings into professional audit reports
+
+## Author
+
+**Nicolas Donboly** - Trail of Bits
+
+Version: 1.0.0

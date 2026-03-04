@@ -1,0 +1,439 @@
+---
+title: Insecure Defaults
+description: Detect fail-open insecure defaults including hardcoded credentials, weak crypto, and permissive security configs
+---
+
+Security skill for detecting insecure default configurations that create vulnerabilities when applications run with missing or incomplete configuration. Focuses on fail-open patterns where apps run insecurely rather than crash safely.
+
+## Overview
+
+The insecure-defaults plugin identifies security vulnerabilities caused by dangerous default values that allow applications to run in production with weak or missing security controls. It distinguishes between fail-secure patterns (app crashes) and fail-open patterns (app runs insecurely).
+
+<Info>
+**Author:** Trail of Bits  
+**Version:** 1.0.0
+</Info>
+
+<Note>
+**Critical Distinction:** Applications that crash without proper configuration are safe (fail-secure). Applications that run with insecure defaults are vulnerable (fail-open).
+</Note>
+
+## Vulnerability Categories
+
+The plugin detects five categories of insecure defaults:
+
+<CardGroup cols={2}>
+  <Card title="Hardcoded Fallback Secrets" icon="key">
+    JWT keys, API keys, session secrets with fallback values
+  </Card>
+  <Card title="Default Credentials" icon="user-lock">
+    admin/admin, root/password, test API keys
+  </Card>
+  <Card title="Weak Cryptographic Defaults" icon="lock-open">
+    MD5, DES, ECB mode for security-sensitive operations
+  </Card>
+  <Card title="Permissive Access Control" icon="door-open">
+    CORS *, public by default, world-writable permissions
+  </Card>
+  <Card title="Missing Security Configuration" icon="shield-xmark">
+    Authentication disabled by default, debug mode enabled
+  </Card>
+</CardGroup>
+
+## When to Use
+
+Use this skill when:
+
+- **Security auditing** production applications or services
+- **Configuration review** of deployment manifests (Docker, Kubernetes, IaC)
+- **Pre-production checks** before deploying new services
+- **Code review** of authentication, authorization, or cryptographic code
+- **Environment variable handling** analysis for secrets management
+- **API security review** checking CORS, rate limiting, authentication
+- **Third-party integration** review for hardcoded test credentials
+
+## When NOT to Use
+
+Do not use this skill for:
+
+- **Test fixtures** explicitly scoped to test environments (`test/`, `spec/`, `__tests__/`)
+- **Example/template files** (`.example`, `.template`, `.sample` suffixes)
+- **Development-only tools** (local Docker Compose for dev, debug scripts)
+- **Documentation examples** in README.md or docs/ directories
+- **Build-time configuration** that gets replaced during deployment
+- **Crash-on-missing behavior** where app won't start without proper config (fail-secure)
+
+<Tip>
+When in doubt: trace the code path to determine if the app runs with the default or crashes.
+</Tip>
+
+## Installation
+
+```bash
+/plugin install insecure-defaults
+```
+
+## Workflow
+
+Follow this workflow for every potential finding:
+
+<Steps>
+  <Step title="SEARCH: Project Discovery">
+    Determine language, framework, and project conventions. Find secret storage locations, credentialed integrations, cryptography usage, and security configuration.
+  </Step>
+  <Step title="VERIFY: Actual Behavior">
+    Trace code paths to understand runtime behavior. Determine what happens if configuration is missing.
+  </Step>
+  <Step title="CONFIRM: Production Impact">
+    Check if production config provides the variable or if the insecure default reaches production.
+  </Step>
+  <Step title="REPORT: With Evidence">
+    Document location, pattern, verification results, production impact, and exploitation scenario.
+  </Step>
+</Steps>
+
+## Category 1: Fallback Secrets
+
+### Vulnerable Patterns
+
+<CodeGroup>
+
+```python Python: Environment variable with fallback
+# File: src/auth/jwt.py
+SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key-123')
+
+# Used in security context
+def create_token(user_id):
+    return jwt.encode({'user_id': user_id}, SECRET_KEY, algorithm='HS256')
+```
+
+```javascript JavaScript: Logical OR fallback
+// File: config/database.js
+const DB_PASSWORD = process.env.DB_PASSWORD || 'admin123';
+
+const pool = new Pool({
+  user: 'admin',
+  password: DB_PASSWORD,
+  database: 'production'
+});
+```
+
+```ruby Ruby: fetch with default
+# File: config/secrets.rb
+Rails.application.credentials.secret_key_base =
+  ENV.fetch('SECRET_KEY_BASE', 'fallback-secret-base')
+```
+
+</CodeGroup>
+
+**Why vulnerable:** App runs with known secret if env var is missing. Attacker can forge tokens/access database.
+
+### Secure Patterns
+
+<CodeGroup>
+
+```python Fail-secure: Crashes without config
+# File: src/auth/jwt.py
+SECRET_KEY = os.environ['SECRET_KEY']  # Raises KeyError if missing
+
+# App won't start without SECRET_KEY - fail-secure
+```
+
+```javascript Explicit validation
+// File: config/database.js
+if (!process.env.DB_PASSWORD) {
+  throw new Error('DB_PASSWORD environment variable required');
+}
+const DB_PASSWORD = process.env.DB_PASSWORD;
+```
+
+</CodeGroup>
+
+## Category 2: Default Credentials
+
+### Vulnerable Patterns
+
+<CodeGroup>
+
+```python Hardcoded admin account
+# File: src/models/user.py
+def bootstrap_admin():
+    """Create default admin account if none exists"""
+    if not User.query.filter_by(role='admin').first():
+        admin = User(
+            username='admin',
+            password=hash_password('admin123'),
+            role='admin'
+        )
+        db.session.add(admin)
+        db.session.commit()
+```
+
+```javascript API key in code
+// File: src/integrations/payment.js
+const STRIPE_API_KEY = process.env.STRIPE_KEY || 'sk_test_...';
+
+const stripe = require('stripe')(STRIPE_API_KEY);
+```
+
+```java Database connection string
+// File: DatabaseConfig.java
+private static final String DB_URL = System.getenv().getOrDefault(
+    "DATABASE_URL",
+    "postgresql://admin:password@localhost:5432/prod"
+);
+```
+
+</CodeGroup>
+
+**Why vulnerable:** Default admin accounts or test credentials reach production if env vars missing.
+
+### Secure Patterns
+
+```python Disabled default account
+# File: src/models/user.py
+def bootstrap_admin():
+    """Admin account MUST be configured via environment"""
+    username = os.environ['ADMIN_USERNAME']
+    password = os.environ['ADMIN_PASSWORD']
+
+    if not User.query.filter_by(username=username).first():
+        admin = User(username=username, password=hash_password(password), role='admin')
+        db.session.add(admin)
+```
+
+## Category 3: Fail-Open Security
+
+### Vulnerable Patterns
+
+<CodeGroup>
+
+```python Authentication disabled by default
+# File: config/security.py
+REQUIRE_AUTH = os.getenv('REQUIRE_AUTH', 'false').lower() == 'true'
+
+@app.before_request
+def check_auth():
+    if not REQUIRE_AUTH:
+        return  # Skip auth check
+    # ... auth logic
+```
+
+```javascript CORS allows all origins
+// File: server.js
+const allowedOrigins = process.env.ALLOWED_ORIGINS || '*';
+
+app.use(cors({ origin: allowedOrigins }));
+```
+
+```python Debug mode enabled by default
+# File: config.py
+DEBUG = os.getenv('DEBUG', 'true').lower() != 'false'  # Default: true
+
+if DEBUG:
+    app.config['DEBUG'] = True
+    app.config['PROPAGATE_EXCEPTIONS'] = True
+```
+
+</CodeGroup>
+
+**Why vulnerable:** Default is insecure. App runs without authentication, accepts requests from any origin, or leaks stack traces if env var missing.
+
+### Secure Patterns
+
+<CodeGroup>
+
+```python Authentication required by default
+# File: config/security.py
+REQUIRE_AUTH = os.getenv('REQUIRE_AUTH', 'true').lower() == 'true'  # Default: true
+
+# Or better - crash if not explicitly configured
+REQUIRE_AUTH = os.environ['REQUIRE_AUTH'].lower() == 'true'
+```
+
+```javascript CORS requires explicit configuration
+// File: server.js
+if (!process.env.ALLOWED_ORIGINS) {
+  throw new Error('ALLOWED_ORIGINS must be configured');
+}
+const allowedOrigins = process.env.ALLOWED_ORIGINS.split(',');
+
+app.use(cors({ origin: allowedOrigins }));
+```
+
+</CodeGroup>
+
+## Category 4: Weak Crypto
+
+### Vulnerable Patterns
+
+<CodeGroup>
+
+```python MD5 for password hashing
+# File: src/auth/passwords.py
+import hashlib
+
+def hash_password(password):
+    """Hash user password"""
+    return hashlib.md5(password.encode()).hexdigest()
+```
+
+```java DES encryption for sensitive data
+// File: Encryption.java
+public static byte[] encrypt(String data, byte[] key) {
+    Cipher cipher = Cipher.getInstance("DES/ECB/PKCS5Padding");
+    SecretKeySpec secretKey = new SecretKeySpec(key, "DES");
+    cipher.init(Cipher.ENCRYPT_MODE, secretKey);
+    return cipher.doFinal(data.getBytes());
+}
+```
+
+```javascript SHA1 for signature verification
+// File: webhooks.js
+function verifySignature(payload, signature) {
+  const hmac = crypto.createHmac('sha1', WEBHOOK_SECRET);
+  const computed = hmac.update(payload).digest('hex');
+  return computed === signature;
+}
+```
+
+</CodeGroup>
+
+**Why vulnerable:**
+- MD5 is cryptographically broken, rainbow tables exist
+- DES has 56-bit keys (brute-forceable), ECB mode leaks patterns
+- SHA1 collisions exist
+
+<Warning>
+Use bcrypt/Argon2 for passwords, AES-GCM for encryption, SHA256+ for signatures.
+</Warning>
+
+### Secure Patterns
+
+<CodeGroup>
+
+```python Modern crypto for passwords
+# File: src/auth/passwords.py
+import bcrypt
+
+def hash_password(password):
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+```
+
+```java Strong encryption
+// File: Encryption.java
+Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+// 256-bit key, authenticated encryption
+```
+
+</CodeGroup>
+
+<Note>
+Weak crypto for non-security checksums (cache keys, ETags) is acceptable.
+</Note>
+
+## Category 5: Permissive Access
+
+### Vulnerable Patterns
+
+<CodeGroup>
+
+```python File permissions world-writable
+# File: src/storage/files.py
+def create_secure_file(path):
+    fd = os.open(path, os.O_CREAT | os.O_WRONLY, 0o666)  # rw-rw-rw-
+    return fd
+```
+
+```python S3 bucket public by default
+# File: infrastructure/storage.py
+def create_storage_bucket(name):
+    bucket = s3.create_bucket(
+        Bucket=name,
+        ACL='public-read'  # Publicly readable by default
+    )
+```
+
+```python API allows any origin with credentials
+# File: app.py
+@app.after_request
+def after_request(response):
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Credentials'] = 'true'
+    return response
+```
+
+</CodeGroup>
+
+**Why vulnerable:**
+- Any user can write to file (should be 0o600 or 0o644)
+- Sensitive data exposed publicly
+- CORS misconfiguration allows credential theft from any site
+
+## Search Patterns
+
+Use these grep patterns to discover insecure defaults:
+
+<AccordionGroup>
+  <Accordion title="Fallback Secrets">
+    ```bash
+    grep -r "getenv.*\) or ['\"]" **/config/ **/auth/
+    grep -r "process\.env\.[A-Z_]+ \|\| ['\"]" src/
+    grep -r "ENV\.fetch.*default:" config/
+    ```
+  </Accordion>
+  <Accordion title="Hardcoded Credentials">
+    ```bash
+    grep -r "password.*=.*['\"][^'\"]{8,}['\"]" src/
+    grep -r "api[_-]?key.*=.*['\"][^'\"]+['\"]" config/
+    grep -r "secret.*=.*['\"][^'\"]+['\"]" --include="*.py" --include="*.js"
+    ```
+  </Accordion>
+  <Accordion title="Weak Defaults">
+    ```bash
+    grep -r "DEBUG.*=.*true" config/
+    grep -r "AUTH.*=.*false" src/
+    grep -r "CORS.*=.*\*" server/
+    ```
+  </Accordion>
+  <Accordion title="Crypto Algorithms">
+    ```bash
+    grep -r "MD5\|SHA1\|DES\|RC4\|ECB" src/auth/ src/crypto/
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Rationalizations to Reject
+
+<Warning>
+Reject these shortcuts that lead to missed findings:
+</Warning>
+
+| Rationalization | Why It's Wrong |
+|-----------------|----------------|
+| "It's just a development default" | If it reaches production code, it's a finding |
+| "The production config overrides it" | Verify prod config exists; code-level vulnerability remains |
+| "This would never run without proper config" | Prove it with code trace; many apps fail silently |
+| "It's behind authentication" | Defense in depth; compromised session still exploits weak defaults |
+| "We'll fix it before release" | Document now; "later" rarely comes |
+
+## Report Format
+
+For each finding, document:
+
+```markdown
+Finding: Hardcoded JWT Secret Fallback
+Location: src/auth/jwt.ts:15
+Pattern: const secret = process.env.JWT_SECRET || 'default';
+
+Verification: App starts without JWT_SECRET; secret used in jwt.sign() at line 42
+Production Impact: Dockerfile missing JWT_SECRET
+Exploitation: Attacker forges JWTs using 'default', gains unauthorized access
+
+Severity: CRITICAL
+```
+
+## Related Skills
+
+- [Audit Context Building](/plugins/audit-context-building) - Understand security architecture
+- [Differential Review](/plugins/differential-review) - Review config changes in PRs

@@ -1,0 +1,405 @@
+---
+title: "Skills"
+description: "How skills provide knowledge and guidance to Claude"
+---
+
+## What are Skills?
+
+Skills are structured guidance files that teach Claude how to perform specific tasks. Unlike traditional documentation, skills provide behavioral guidance - they explain the WHY and WHEN, not just the WHAT.
+
+<Note>
+Skills should provide guidance Claude doesn't already have, not duplicate reference material. Focus on judgment calls, decision criteria, and anti-patterns.
+</Note>
+
+## Skill Structure
+
+```
+skills/
+  <skill-name>/
+    SKILL.md          # Entry point with frontmatter
+    references/       # Optional: detailed reference docs
+    workflows/        # Optional: step-by-step guides
+    scripts/          # Optional: utility scripts
+    templates/        # Optional: output templates
+```
+
+### Example Structures
+
+<AccordionGroup>
+  <Accordion title="Basic Skill (ask-questions-if-underspecified)">
+    ```
+    skills/ask-questions-if-underspecified/
+      SKILL.md          # All guidance in one file
+    ```
+  </Accordion>
+
+  <Accordion title="Intermediate Skill (constant-time-analysis)">
+    ```
+    skills/constant-time-analysis/
+      SKILL.md
+      references/
+        compiled.md     # C/C++/Rust guidance
+        javascript.md   # JavaScript-specific
+        python.md       # Python-specific
+        ruby.md         # Ruby-specific
+    ```
+  </Accordion>
+
+  <Accordion title="Advanced Skill (interpreting-culture-index)">
+    ```
+    skills/interpreting-culture-index/
+      SKILL.md
+      references/
+        primary-traits.md
+        secondary-traits.md
+        motivators.md
+        anti-patterns.md
+      workflows/
+        analyze-team.md
+        detect-burnout.md
+        interview-debrief.md
+      scripts/
+        extract_pdf.py
+        pyproject.toml
+      templates/
+        individual-report.md
+        team-report.md
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Frontmatter Format
+
+Every `SKILL.md` must begin with YAML frontmatter:
+
+```yaml SKILL.md
+---
+name: skill-name
+description: "Third-person description of what it does and when to use it"
+allowed-tools:  # Optional: restrict to needed tools only
+  - Read
+  - Grep
+  - Bash
+---
+```
+
+### Frontmatter Fields
+
+<ParamField path="name" type="string" required>
+  Skill name in kebab-case. Maximum 64 characters. Must be unique within the plugin.
+</ParamField>
+
+<ParamField path="description" type="string" required>
+  Third-person description that triggers correctly. Include specific use cases and keywords.
+  
+  **Good:** "Detects timing side-channels in cryptographic code. Use when auditing constant-time implementations."
+  
+  **Bad:** "Helps with security analysis"
+</ParamField>
+
+<ParamField path="allowed-tools" type="array">
+  Optional list of tool names to restrict Claude's access. Only list tools the skill actually needs.
+  
+  Common tools: `Read`, `Grep`, `Glob`, `Bash`, `Write`, `Edit`
+</ParamField>
+
+## Writing Effective Descriptions
+
+Your skill competes with 100+ others. The description determines when Claude invokes it.
+
+<CardGroup cols={2}>
+  <Card title="Third-person voice" icon="comment">
+    ✅ "Analyzes timing side-channels"
+    
+    ❌ "I help analyze timing"
+  </Card>
+
+  <Card title="Include triggers" icon="bullseye">
+    ✅ "Use when auditing Solidity contracts"
+    
+    ❌ "Smart contract analysis tool"
+  </Card>
+
+  <Card title="Be specific" icon="crosshairs">
+    ✅ "Detects reentrancy vulnerabilities"
+    
+    ❌ "Helps with security"
+  </Card>
+
+  <Card title="State the domain" icon="tag">
+    ✅ "for cryptographic code"
+    
+    ❌ "for code"
+  </Card>
+</CardGroup>
+
+## Required Sections
+
+Every `SKILL.md` must include these sections:
+
+### When to Use
+
+Specific scenarios where this skill applies:
+
+```markdown
+## When to Use
+
+Use this skill when a request has multiple plausible interpretations or key 
+details (objective, scope, constraints, environment, or safety) are unclear.
+```
+
+### When NOT to Use
+
+Scenarios where another approach is better:
+
+```markdown
+## When NOT to Use
+
+Do not use this skill when the request is already clear, or when a quick, 
+low-risk discovery read can answer the missing details.
+```
+
+### Additional Requirements for Security Skills
+
+Security and audit skills must also include:
+
+```markdown
+## Rationalizations to Reject
+
+Common shortcuts or rationalizations that lead to missed findings:
+- "This code looks safe because it uses a well-known library"
+- "The test suite passes, so there are no issues"
+- "The code review was approved, nothing to worry about"
+```
+
+## Content Organization
+
+<Steps>
+  <Step title="Keep SKILL.md under 500 lines">
+    If content exceeds 500 lines, split into `references/` and `workflows/` directories.
+  </Step>
+
+  <Step title="Use progressive disclosure">
+    Put essential quick-start guidance in SKILL.md. Link to detailed references for advanced users.
+  </Step>
+
+  <Step title="One level deep">
+    SKILL.md can link to files, but those files shouldn't chain to more files.
+    
+    ✅ Nested folders: `references/guides/topic.md`
+    
+    ❌ Reference chains: `SKILL.md → file1.md → file2.md`
+  </Step>
+</Steps>
+
+## Progressive Disclosure Pattern
+
+```markdown SKILL.md
+## Quick Start
+
+[Core instructions here - the 80% case]
+
+## Advanced Patterns
+
+For complex scenarios involving X, see [ADVANCED.md](references/ADVANCED.md)
+
+## Language-Specific Guidance
+
+- [Python](references/python.md)
+- [JavaScript](references/javascript.md)
+- [Rust](references/rust.md)
+
+## API Reference
+
+Complete method documentation: [API.md](references/API.md)
+```
+
+## Using Python Scripts
+
+Skills can include Python scripts with dependencies using PEP 723 inline metadata:
+
+```python scripts/process.py
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["requests>=2.28", "pydantic>=2.0"]
+# ///
+
+import requests
+from pydantic import BaseModel
+
+# Your script here
+```
+
+**Invoke with `uv run`** for automatic dependency resolution:
+
+```markdown SKILL.md
+To extract data from the PDF:
+
+```bash
+uv run {baseDir}/scripts/extract_pdf.py input.pdf output.json
+```
+```
+
+<Tip>
+Include `pyproject.toml` in the `scripts/` directory for development tooling (ruff, mypy, etc.)
+</Tip>
+
+## Value-Add Guidelines
+
+Skills should provide guidance Claude doesn't already have:
+
+<CardGroup cols={2}>
+  <Card title="Behavioral Guidance" icon="compass">
+    Don't paste entire specs. Teach when and how to look things up.
+  </Card>
+
+  <Card title="Explain WHY" icon="lightbulb">
+    Include trade-offs, decision criteria, and judgment calls.
+  </Card>
+
+  <Card title="Document Anti-patterns" icon="triangle-exclamation">
+    Say why something is wrong, not just that it's wrong.
+  </Card>
+
+  <Card title="Provide Context" icon="book-open">
+    Connect concepts to real-world security implications.
+  </Card>
+</CardGroup>
+
+### Example: DWARF Expert Skill
+
+The DWARF skill doesn't include the full DWARF specification. Instead, it:
+
+- Teaches Claude how to use `dwarfdump`, `readelf`, and `pyelftools`
+- Explains judgment about when each tool is appropriate
+- Shows how to look up what's needed from the spec
+- Provides decision criteria for analysis approaches
+
+## Scope Boundaries
+
+Prescriptiveness should match task risk:
+
+<Tabs>
+  <Tab title="Strict (High Risk)">
+    **Use for fragile tasks:**
+    - Security audits
+    - Cryptographic implementations
+    - Compliance checks
+    - Data migration
+    
+    Provide rigid step-by-step enforcement with quality gates.
+  </Tab>
+
+  <Tab title="Flexible (Low Risk)">
+    **Use for variable tasks:**
+    - Code exploration
+    - Documentation
+    - Refactoring
+    - Feature development
+    
+    Offer options and judgment calls. Trust Claude's reasoning.
+  </Tab>
+</Tabs>
+
+## Real Examples
+
+<AccordionGroup>
+  <Accordion title="ask-questions-if-underspecified (Basic)">
+    Clarifies requirements before implementing when requests have multiple interpretations.
+
+    **When to Use:** When key details (objective, scope, constraints) are unclear.
+
+    **Workflow:**
+    1. Decide if the request is underspecified
+    2. Ask must-have questions first
+    3. Restate requirements before starting work
+  </Accordion>
+</AccordionGroup>
+
+<AccordionGroup>
+  <Accordion title="constant-time-analysis (Intermediate)">
+    Main SKILL.md provides core workflow and links to language-specific guidance for C/C++/Rust, Python, JavaScript, and Ruby. Each reference file contains deep technical details for that language.
+  </Accordion>
+
+  <Accordion title="interpreting-culture-index (Advanced)">
+    Interprets Culture Index surveys and behavioral profiles with comprehensive support for individual profiles, team composition, burnout detection, and hiring.
+
+    **Includes:**
+    - 9 reference files for trait details
+    - 11 workflow files for specific use cases
+    - Python package for PDF extraction
+    - 6 template files for report generation
+  </Accordion>
+</AccordionGroup>
+
+## Quality Checklist
+
+Before submitting a skill:
+
+<AccordionGroup>
+  <Accordion title="Technical (CI validates)">
+    - [ ] Valid YAML frontmatter with `name` and `description`
+    - [ ] Name is kebab-case, ≤64 characters
+    - [ ] All referenced files exist
+    - [ ] No hardcoded paths (`/Users/...`, `/home/...`)
+    - [ ] Uses `{baseDir}` for all plugin paths
+  </Accordion>
+
+  <Accordion title="Quality (reviewers check)">
+    - [ ] Description triggers correctly (third-person, specific)
+    - [ ] "When to use" and "When NOT to use" sections present
+    - [ ] Examples are concrete (input → output)
+    - [ ] Explains WHY, not just WHAT
+    - [ ] No duplication of reference material
+  </Accordion>
+
+  <Accordion title="Content">
+    - [ ] SKILL.md under 500 lines (split if larger)
+    - [ ] Progressive disclosure pattern used
+    - [ ] Clear workflow steps
+    - [ ] Anti-patterns documented with explanations
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Learn by Example" icon="graduation-cap">
+    Study the reference skills:
+    - Basic: `ask-questions-if-underspecified`
+    - Intermediate: `constant-time-analysis`
+    - Advanced: `culture-index`
+  </Card>
+
+  <Card title="Test Descriptions" icon="flask">
+    Verify your description triggers correctly. Ask: "Would Claude invoke this for the right tasks?"
+  </Card>
+
+  <Card title="Minimize Dependencies" icon="minimize">
+    Only include `allowed-tools` that are actually needed. Fewer restrictions = more flexibility.
+  </Card>
+
+  <Card title="Iterate Based on Use" icon="arrows-rotate">
+    Skills improve with real-world usage. Update based on what works and what doesn't.
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Commands" icon="terminal" href="/concepts/commands">
+    Create slash commands that invoke skills
+  </Card>
+
+  <Card title="Agents" icon="robot" href="/concepts/agents">
+    Build autonomous agents that use skills
+  </Card>
+
+  <Card title="Create Your First Skill" icon="code" href="/guides/creating-skills">
+    Step-by-step guide to building a skill
+  </Card>
+
+  <Card title="Skill Examples" icon="book" href="/examples/skills">
+    Browse real-world skill implementations
+  </Card>
+</CardGroup>

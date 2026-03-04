@@ -1,0 +1,471 @@
+---
+title: Plugin Structure
+description: Required directory structure and file organization for plugins
+---
+
+## Overview
+
+Claude Code plugins follow a specific directory structure. Understanding this structure is essential for creating valid plugins.
+
+## Basic Structure
+
+Every plugin must follow this structure:
+
+```
+plugins/
+  <plugin-name>/
+    .claude-plugin/
+      plugin.json         # Plugin metadata (required)
+    skills/               # Optional: knowledge/guidance
+    commands/             # Optional: slash commands
+    agents/               # Optional: autonomous agents
+    hooks/                # Optional: event hooks
+    README.md             # Plugin documentation (required)
+```
+
+<Warning>
+Component directories (`skills/`, `commands/`, `agents/`, `hooks/`) must be at the plugin root, NOT inside `.claude-plugin/`. Only `plugin.json` belongs in `.claude-plugin/`.
+</Warning>
+
+## Plugin Naming
+
+Plugin directory names should follow these conventions:
+
+- **Format**: kebab-case
+- **Descriptive**: Name should indicate purpose
+- **Avoid vague names**: `helper`, `utils`, `tools`, `misc`
+- **Avoid reserved words**: `anthropic`, `claude`
+
+**Examples:**
+- ✅ `constant-time-analysis`
+- ✅ `smart-contract-auditor`
+- ✅ `yara-authoring`
+- ❌ `helper`
+- ❌ `my-plugin`
+
+## Plugin Metadata (plugin.json)
+
+Every plugin requires a `plugin.json` file in the `.claude-plugin/` directory:
+
+```json
+{
+  "name": "plugin-name",
+  "version": "1.0.0",
+  "description": "Human-readable description of what the plugin does",
+  "author": {
+    "name": "Your Name",
+    "email": "your.email@example.com",
+    "url": "https://github.com/yourusername"
+  }
+}
+```
+
+### Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Plugin name (kebab-case) |
+| `version` | Yes | Semantic version (e.g., `1.0.0`) |
+| `description` | Yes | What the plugin does |
+| `author.name` | Yes | Author or organization name |
+| `author.email` | No | Contact email |
+| `author.url` | No | Website or GitHub profile |
+
+### Version Management
+
+<Note>
+Clients only update plugins when the version number increases. Always increment the version for substantive changes.
+</Note>
+
+Version must be updated in **two places**:
+1. `plugins/<name>/.claude-plugin/plugin.json`
+2. Root `.claude-plugin/marketplace.json`
+
+Both version numbers must match for the plugin to be recognized properly.
+
+## Skills Directory
+
+Skills provide knowledge and guidance to Claude.
+
+### Structure
+
+```
+skills/
+  <skill-name>/
+    SKILL.md              # Entry point with frontmatter (required)
+    references/           # Optional: detailed documentation
+    workflows/            # Optional: step-by-step guides
+    scripts/              # Optional: utility scripts
+    templates/            # Optional: file templates
+```
+
+### SKILL.md Requirements
+
+Every skill needs a `SKILL.md` file with YAML frontmatter:
+
+```yaml
+---
+name: skill-name              # kebab-case, max 64 chars
+description: "Third-person description of what it does and when to use it"
+allowed-tools:                # Optional: restrict to needed tools only
+  - Read
+  - Grep
+---
+
+# Skill Content
+
+## When to Use
+[Specific scenarios]
+
+## When NOT to Use
+[Scenarios where another approach is better]
+```
+
+See [Skill Authoring](/contributing/skill-authoring) for detailed guidance.
+
+### Supporting Directories
+
+**references/** - Detailed documentation:
+```
+references/
+  ADVANCED.md           # Advanced usage
+  API.md               # API reference
+  TROUBLESHOOTING.md   # Common issues
+```
+
+**workflows/** - Step-by-step guides:
+```
+workflows/
+  audit-workflow.md    # Audit process
+  review-workflow.md   # Review process
+```
+
+**scripts/** - Executable utilities:
+```
+scripts/
+  analyze.py          # Analysis script
+  report.py           # Report generator
+  pyproject.toml      # Development tooling
+```
+
+**templates/** - File templates:
+```
+templates/
+  report-template.md  # Report structure
+  config-template.yml # Configuration template
+```
+
+## Commands Directory
+
+Slash commands provide interactive functionality.
+
+### Structure
+
+```
+commands/
+  command-name.md      # Command definition
+```
+
+### Command Definition
+
+Each command is defined in a markdown file:
+
+```markdown
+---
+name: /command-name
+description: What the command does
+---
+
+# Command Implementation
+
+When the user types `/command-name`, perform these actions:
+
+1. Step one
+2. Step two
+3. Step three
+```
+
+## Agents Directory
+
+Agents provide autonomous task execution.
+
+### Structure
+
+```
+agents/
+  agent-name.md        # Agent definition
+```
+
+### Agent Definition
+
+```markdown
+---
+name: agent-name
+description: What the agent does
+---
+
+# Agent Behavior
+
+This agent autonomously:
+- Task one
+- Task two
+- Task three
+
+## Trigger Conditions
+
+Activate when:
+- Condition A
+- Condition B
+```
+
+## Hooks Directory
+
+Hooks intercept tool calls to validate or enhance behavior.
+
+### Structure
+
+```
+hooks/
+  pre-tool-use/
+    hook-name.sh      # Pre-execution hook
+  post-tool-use/
+    hook-name.sh      # Post-execution hook
+```
+
+### Hook Types
+
+**pre-tool-use** - Runs before tool execution:
+- Validate parameters
+- Prevent dangerous operations
+- Suggest safer alternatives
+
+**post-tool-use** - Runs after tool execution:
+- Process results
+- Generate reports
+- Update state
+
+### Performance Considerations
+
+<Warning>
+Hooks run on EVERY tool invocation. Performance is critical.
+</Warning>
+
+See [Best Practices - Hooks](/contributing/best-practices#hooks-best-practices) for optimization guidance.
+
+## Python Scripts
+
+When including Python scripts, follow these conventions:
+
+### PEP 723 Inline Metadata
+
+Declare dependencies in script headers:
+
+```python
+#!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "requests>=2.28",
+#     "pydantic>=2.0",
+# ]
+# ///
+
+import requests
+from pydantic import BaseModel
+
+# Script code here
+```
+
+### Execution with uv
+
+Scripts should be executed with `uv run`:
+
+```bash
+uv run {baseDir}/scripts/analyze.py input.txt
+```
+
+This automatically handles dependency installation.
+
+### Development Files
+
+Include `pyproject.toml` for development tooling:
+
+```toml
+[project]
+name = "plugin-scripts"
+version = "1.0.0"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+```
+
+## Path Handling
+
+<Warning>
+Never hardcode absolute paths. Always use `{baseDir}` for portability.
+</Warning>
+
+### Using {baseDir}
+
+Claude automatically replaces `{baseDir}` with the skill directory path:
+
+**Good:**
+```bash
+uv run {baseDir}/scripts/process.py input.pdf
+```
+
+**Bad:**
+```bash
+uv run /Users/yourname/plugins/myplugin/scripts/process.py input.pdf
+```
+
+### Path Conventions
+
+- Use `{baseDir}` for paths relative to the skill directory
+- Use forward slashes (`/`) even on Windows
+- Claude handles platform-specific path conversion
+
+## Example Structures
+
+### Basic Plugin (ask-questions-if-underspecified)
+
+Minimal structure with single skill:
+
+```
+ask-questions-if-underspecified/
+  .claude-plugin/
+    plugin.json
+  skills/
+    ask-questions-if-underspecified/
+      SKILL.md
+  README.md
+```
+
+### Intermediate Plugin (constant-time-analysis)
+
+With Python scripts and references:
+
+```
+constant-time-analysis/
+  .claude-plugin/
+    plugin.json
+  skills/
+    constant-time-analysis/
+      SKILL.md
+      references/
+        compiled.md
+        javascript.md
+        python.md
+  ct_analyzer/
+    analyzer.py
+    tests/
+      test_analyzer.py
+  pyproject.toml
+  README.md
+```
+
+### Advanced Plugin (culture-index)
+
+With scripts, workflows, and templates:
+
+```
+culture-index/
+  .claude-plugin/
+    plugin.json
+  skills/
+    interpreting-culture-index/
+      SKILL.md
+      workflows/
+        individual-analysis.md
+        team-analysis.md
+      templates/
+        report-template.md
+  scripts/
+    extract_pdf.py
+    pyproject.toml
+  README.md
+```
+
+## README.md
+
+Every plugin must have a README.md at the plugin root:
+
+```markdown
+# Plugin Name
+
+Brief description of what the plugin does.
+
+## Installation
+
+\`\`\`bash
+/plugin marketplace add trailofbits/skills
+/plugin menu
+\`\`\`
+
+## Features
+
+- Feature 1
+- Feature 2
+- Feature 3
+
+## Usage
+
+### Skill Name
+
+Description and usage example.
+
+## Contributing
+
+See [CONTRIBUTING.md](../../CLAUDE.md) for guidelines.
+
+## License
+
+License information.
+```
+
+## File Organization Checklist
+
+Before submitting, verify:
+
+**Structure:**
+- [ ] `.claude-plugin/plugin.json` exists and is valid JSON
+- [ ] Component directories at plugin root (not in `.claude-plugin/`)
+- [ ] All skills have `SKILL.md` with frontmatter
+- [ ] `README.md` exists at plugin root
+
+**Paths:**
+- [ ] No hardcoded absolute paths
+- [ ] `{baseDir}` used for relative paths
+- [ ] Forward slashes used (even on Windows)
+
+**Python:**
+- [ ] Scripts use PEP 723 inline metadata
+- [ ] `pyproject.toml` in scripts/ for development tools
+- [ ] Execution documented with `uv run`
+
+**Documentation:**
+- [ ] All referenced files exist
+- [ ] References are one level deep (no chains)
+- [ ] SKILL.md under 500 lines
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Skill Authoring" icon="book" href="/contributing/skill-authoring">
+    Learn how to write SKILL.md files
+  </Card>
+  <Card title="Best Practices" icon="star" href="/contributing/best-practices">
+    Follow quality standards
+  </Card>
+  <Card title="Examples" icon="code" href="/contributing/examples">
+    See real-world examples
+  </Card>
+  <Card title="Getting Started" icon="rocket" href="/contributing/getting-started">
+    Start creating your plugin
+  </Card>
+</CardGroup>

@@ -1,0 +1,295 @@
+---
+title: Debug Buttercup
+description: Debug Buttercup CRS Kubernetes deployments
+icon: bug
+---
+
+<Info>
+**Author:** Ronald Eytchison (Trail of Bits)
+</Info>
+
+## Overview
+
+Debug the Buttercup CRS (Cyber Reasoning System) running on Kubernetes. This plugin provides systematic triage workflows, diagnostic commands, and service-specific debugging for all components of the Buttercup fuzzing platform.
+
+## When to Use
+
+<CardGroup cols={2}>
+  <Card title="Pod Failures" icon="circle-exclamation">
+    Pods in the `crs` namespace are in CrashLoopBackOff, OOMKilled, or restarting
+  </Card>
+  <Card title="Cascade Failures" icon="link-slash">
+    Multiple services restart simultaneously (cascade failure)
+  </Card>
+  <Card title="Redis Issues" icon="database">
+    Redis is unresponsive or showing AOF warnings
+  </Card>
+  <Card title="Queue Problems" icon="list">
+    Queues are growing but tasks are not progressing
+  </Card>
+  <Card title="Resource Pressure" icon="memory">
+    Nodes show DiskPressure, MemoryPressure, or PID pressure
+  </Card>
+  <Card title="DinD Failures" icon="docker">
+    Build-bot cannot reach the Docker daemon
+  </Card>
+  <Card title="Scheduler Issues" icon="clock">
+    Scheduler is stuck and not advancing task state
+  </Card>
+  <Card title="Health Check Failures" icon="heart-pulse">
+    Health check probes are failing unexpectedly
+  </Card>
+</CardGroup>
+
+## Service Architecture
+
+All pods run in namespace `crs`. Key services:
+
+| Layer | Services |
+|-------|----------|
+| **Infrastructure** | redis, dind, litellm, registry-cache |
+| **Orchestration** | scheduler, task-server, task-downloader, scratch-cleaner |
+| **Fuzzing** | build-bot, fuzzer-bot, coverage-bot, tracer-bot, merger-bot |
+| **Analysis** | patcher, seed-gen, program-model, pov-reproducer |
+| **Interface** | competition-api, ui |
+
+## Triage Workflow
+
+<Steps>
+  <Step title="Check Pod Status">
+    Look for restarts, CrashLoopBackOff, OOMKilled:
+    ```bash
+    kubectl get pods -n crs -o wide
+    ```
+  </Step>
+  <Step title="Review Events">
+    See the timeline of what went wrong:
+    ```bash
+    kubectl get events -n crs --sort-by='.lastTimestamp'
+    ```
+  </Step>
+  <Step title="Filter Warnings">
+    Focus on critical issues:
+    ```bash
+    kubectl get events -n crs --field-selector type=Warning --sort-by='.lastTimestamp'
+    ```
+  </Step>
+  <Step title="Investigate Specific Pod">
+    Check why a pod restarted:
+    ```bash
+    # Check Last State Reason (OOMKilled, Error, Completed)
+    kubectl describe pod -n crs <pod-name> | grep -A8 'Last State:'
+
+    # Check actual resource limits
+    kubectl get pod -n crs <pod-name> -o jsonpath='{.spec.containers[0].resources}'
+
+    # Crashed container's logs
+    kubectl logs -n crs <pod-name> --previous --tail=200
+
+    # Current logs
+    kubectl logs -n crs <pod-name> --tail=200
+    ```
+  </Step>
+</Steps>
+
+### Cascade Detection
+
+<Warning>
+When many pods restart around the same time, check for a shared-dependency failure before investigating individual pods.
+</Warning>
+
+The most common cascade: **Redis goes down → every service gets `ConnectionError`/`ConnectionRefusedError` → mass restarts**.
+
+Look for the same error across multiple `--previous` logs. If they all say `redis.exceptions.ConnectionError`, debug Redis, not the individual services.
+
+### Historical vs Ongoing Issues
+
+<Tip>
+High restart counts don't necessarily mean an issue is ongoing. Restarts accumulate over a pod's lifetime. Always distinguish:
+- Use `--since=300s` to confirm issues are actively happening now
+- Use `--timestamps` to correlate events across services
+- Check `Last State` timestamps in `describe pod` to see when the most recent crash occurred
+</Tip>
+
+## Redis Debugging
+
+Redis is the backbone. When it goes down, everything cascades.
+
+<Tabs>
+  <Tab title="Status Check">
+    ```bash
+    # Redis pod status
+    kubectl get pods -n crs -l app.kubernetes.io/name=redis
+
+    # Redis logs (AOF warnings, OOM, connection issues)
+    kubectl logs -n crs -l app.kubernetes.io/name=redis --tail=200
+    ```
+  </Tab>
+  <Tab title="Redis CLI">
+    ```bash
+    # Connect to Redis
+    kubectl exec -n crs <redis-pod> -- redis-cli
+    ```
+
+    Inside redis-cli:
+    ```redis
+    INFO memory          # used_memory_human, maxmemory
+    INFO persistence     # aof_enabled, aof_last_bgrewrite_status
+    INFO clients         # connected_clients, blocked_clients
+    INFO stats           # total_connections_received, rejected_connections
+    CLIENT LIST          # see who's connected
+    DBSIZE               # total keys
+
+    # AOF configuration
+    CONFIG GET appendonly     # is AOF enabled?
+    CONFIG GET appendfsync   # fsync policy: everysec, always, or no
+    ```
+  </Tab>
+  <Tab title="Queue Inspection">
+    Buttercup uses Redis streams with consumer groups.
+
+    ```bash
+    # Check stream length (pending messages)
+    kubectl exec -n crs <redis-pod> -- redis-cli XLEN fuzzer_build_queue
+
+    # Check consumer group lag
+    kubectl exec -n crs <redis-pod> -- redis-cli XINFO GROUPS fuzzer_build_queue
+
+    # Check pending messages per consumer
+    kubectl exec -n crs <redis-pod> -- redis-cli XPENDING fuzzer_build_queue build_bot_consumers - + 10
+
+    # Task registry size
+    kubectl exec -n crs <redis-pod> -- redis-cli HLEN tasks_registry
+
+    # Task state counts
+    kubectl exec -n crs <redis-pod> -- redis-cli SCARD cancelled_tasks
+    kubectl exec -n crs <redis-pod> -- redis-cli SCARD succeeded_tasks
+    kubectl exec -n crs <redis-pod> -- redis-cli SCARD errored_tasks
+    ```
+
+    **Key Queues:**
+    - `fuzzer_build_queue` - Build requests
+    - `fuzzer_crash_queue` - Crash reports
+    - `confirmed_vulnerabilities_queue` - Confirmed vulns
+    - `tasks_ready_queue` - Ready tasks
+    - `patches_queue` - Patch requests
+    - `pov_reproducer_requests_queue` - POV reproduction requests
+
+    **Consumer Groups:**
+    - `build_bot_consumers`
+    - `orchestrator_group`
+    - `patcher_group`
+    - `tracer_bot_group`
+  </Tab>
+  <Tab title="Disk Check">
+    ```bash
+    # What is /data mounted on? (disk vs tmpfs matters for AOF performance)
+    kubectl exec -n crs <redis-pod> -- mount | grep /data
+    kubectl exec -n crs <redis-pod> -- du -sh /data/
+    ```
+  </Tab>
+</Tabs>
+
+## Resource Pressure
+
+```bash
+# Per-pod CPU/memory
+kubectl top pods -n crs
+
+# Node-level
+kubectl top nodes
+
+# Node conditions (disk pressure, memory pressure, PID pressure)
+kubectl describe node <node> | grep -A5 Conditions
+
+# Disk usage inside a pod
+kubectl exec -n crs <pod> -- df -h
+
+# What's eating disk
+kubectl exec -n crs <pod> -- sh -c 'du -sh /corpus/* 2>/dev/null'
+kubectl exec -n crs <pod> -- sh -c 'du -sh /scratch/* 2>/dev/null'
+```
+
+## Health Checks
+
+Pods write timestamps to `/tmp/health_check_alive`. The liveness probe checks file freshness.
+
+```bash
+# Check health file freshness
+kubectl exec -n crs <pod> -- stat /tmp/health_check_alive
+kubectl exec -n crs <pod> -- cat /tmp/health_check_alive
+```
+
+<Info>
+If a pod is restart-looping, the health check file is likely going stale because the main process is blocked (e.g. waiting on Redis, stuck on I/O).
+</Info>
+
+## Service-Specific Quick Reference
+
+<CardGroup cols={2}>
+  <Card title="DinD (Docker-in-Docker)" icon="docker">
+    Check docker daemon crashes, storage driver errors:
+    ```bash
+    kubectl logs -n crs -l app=dind --tail=100
+    ```
+  </Card>
+  <Card title="Build-bot" icon="hammer">
+    Check build queue depth, DinD connectivity, OOM during compilation
+  </Card>
+  <Card title="Fuzzer-bot" icon="bug">
+    Check corpus disk usage, CPU throttling, crash queue backlog
+  </Card>
+  <Card title="Patcher" icon="code">
+    Check LiteLLM connectivity, LLM timeout, patch queue depth
+  </Card>
+  <Card title="Scheduler" icon="clock">
+    The central brain:
+    ```bash
+    kubectl logs -n crs -l app=scheduler --tail=-1 --prefix | grep "WAIT_PATCH_PASS\|ERROR\|SUBMIT"
+    ```
+  </Card>
+</CardGroup>
+
+## Deployment Config Verification
+
+When behavior doesn't match expectations, verify Helm values actually took effect:
+
+```bash
+# Check a pod's actual resource limits
+kubectl get pod -n crs <pod-name> -o jsonpath='{.spec.containers[0].resources}'
+
+# Check a pod's actual volume definitions
+kubectl get pod -n crs <pod-name> -o jsonpath='{.spec.volumes}'
+```
+
+<Warning>
+Helm values template typos (e.g. wrong key names) silently fall back to chart defaults. If deployed resources don't match the values template, check for key name mismatches.
+</Warning>
+
+## Telemetry (OpenTelemetry / Signoz)
+
+All services export traces and metrics via OpenTelemetry. If Signoz is deployed (`global.signoz.deployed: true`), use its UI for distributed tracing.
+
+```bash
+# Check if OTEL is configured
+kubectl exec -n crs <pod> -- env | grep OTEL
+
+# Verify Signoz pods are running (if deployed)
+kubectl get pods -n platform -l app.kubernetes.io/name=signoz
+```
+
+<Tip>
+Traces are especially useful for diagnosing slow task processing, identifying which service in a pipeline is the bottleneck, and correlating events across the scheduler → build-bot → fuzzer-bot chain.
+</Tip>
+
+## Installation
+
+```bash
+/plugins install debug-buttercup
+```
+
+## When NOT to Use
+
+- Deploying or upgrading Buttercup (use Helm and deployment guides)
+- Debugging issues outside the `crs` Kubernetes namespace
+- Performance tuning that doesn't involve a failure symptom

@@ -1,0 +1,163 @@
+---
+title: Getting Started
+description: Learn how to start contributing skills to the Trail of Bits Skills Marketplace
+---
+
+## Welcome
+
+We welcome contributions to the Trail of Bits Skills Marketplace! This guide will help you get started with creating your first skill or plugin.
+
+## Prerequisites
+
+Before you begin, make sure you have:
+
+- Familiarity with Claude Code and how skills work
+- Basic understanding of YAML frontmatter
+- Git and GitHub account for submitting PRs
+
+## Quick Start
+
+<Steps>
+  <Step title="Choose a complexity level">
+    Start by choosing a reference skill that matches your target complexity:
+
+    | Complexity | Reference Skill | What It Demonstrates |
+    |------------|----------------|----------------------|
+    | **Basic** | [ask-questions-if-underspecified](https://github.com/trailofbits/skills/tree/main/plugins/ask-questions-if-underspecified) | Minimal frontmatter, simple guidance |
+    | **Intermediate** | [constant-time-analysis](https://github.com/trailofbits/skills/tree/main/plugins/constant-time-analysis) | Python package, references/, language-specific docs |
+    | **Advanced** | [culture-index](https://github.com/trailofbits/skills/tree/main/plugins/culture-index) | Scripts, workflows/, templates/, PDF extraction, multiple entry points |
+
+    <Note>
+    When in doubt, copy one of these reference skills and adapt it to your needs.
+    </Note>
+  </Step>
+
+  <Step title="Set up your plugin structure">
+    Create the basic directory structure for your plugin:
+
+    ```
+    plugins/
+      your-plugin-name/
+        .claude-plugin/
+          plugin.json
+        skills/
+          your-skill-name/
+            SKILL.md
+        README.md
+    ```
+
+    See [Plugin Structure](/contributing/plugin-structure) for detailed requirements.
+  </Step>
+
+  <Step title="Write your SKILL.md">
+    Every skill needs a `SKILL.md` file with proper frontmatter. See [Skill Authoring](/contributing/skill-authoring) for detailed guidance.
+
+    ```yaml
+    ---
+    name: your-skill-name
+    description: "Third-person description of what it does and when to use it"
+    ---
+    ```
+  </Step>
+
+  <Step title="Test your skill">
+    Install your plugin locally for testing:
+
+    ```bash
+    # Navigate to parent directory of the skills repo
+    cd /path/to/parent
+    /plugins marketplace add ./skills
+    ```
+
+    Then use `/plugin menu` in Claude Code to install and test your plugin.
+  </Step>
+
+  <Step title="Submit a pull request">
+    Once your skill is working, submit a PR! See the [PR Checklist](#pr-checklist) below.
+  </Step>
+</Steps>
+
+## Official Resources
+
+Before creating a skill, review these official Anthropic resources:
+
+- [Claude Code Plugins](https://code.claude.com/docs/en/plugins) - Plugin system documentation
+- [Agent Skills](https://code.claude.com/docs/en/skills) - How skills work
+- [Best Practices](https://code.claude.com/docs/en/skills#best-practices) - General best practices
+- [Skill Authoring Best Practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices) - Progressive disclosure, degrees of freedom, workflow checklists
+- [The Complete Guide to Building Skills](https://resources.anthropic.com/hubfs/The-Complete-Guide-to-Building-Skill-for-Claude.pdf) - Evaluation-driven development, iterative testing
+
+## Example Plugins to Study
+
+Learn from production-quality plugins:
+
+- [superpowers](https://github.com/obra/superpowers) - Advanced workflow patterns, TDD enforcement, multi-skill orchestration
+- [compound-engineering-plugin](https://github.com/EveryInc/compound-engineering-plugin) - Production plugin structure
+- [getsentry/skills](https://github.com/getsentry/skills) - Production Sentry skills; `security-review` is a standout routing + progressive disclosure example
+
+## Deep Dives
+
+For comprehensive skill authoring guidance:
+
+- [Claude Skills Deep Dive](https://leehanchung.github.io/blogs/2025/10/26/claude-skills-deep-dive/) - Comprehensive analysis of skill architecture
+
+## PR Checklist
+
+Before submitting your pull request, ensure you've completed these items:
+
+### Technical (CI validates these)
+
+- [ ] Valid YAML frontmatter with `name` and `description`
+- [ ] Name is kebab-case, ≤64 characters
+- [ ] All referenced files exist
+- [ ] No hardcoded paths (`/Users/...`, `/home/...`)
+
+### Quality (reviewers check these)
+
+- [ ] Description triggers correctly (third-person, specific)
+- [ ] "When to use" and "When NOT to use" sections present
+- [ ] Examples are concrete (input → output)
+- [ ] Explains WHY, not just WHAT
+
+### Documentation
+
+- [ ] Plugin has README.md
+- [ ] Added to root README.md table
+- [ ] Registered in root `.claude-plugin/marketplace.json` (repo-level, not the plugin's own `.claude-plugin/`)
+- [ ] Added to CODEOWNERS with plugin-specific ownership (`/plugins/<name>/ @gh-username @dguido`)
+  - To find the GitHub username: run `gh api user --jq .login`
+
+### Version updates (for existing plugins)
+
+- [ ] Increment version in both `plugins/<name>/.claude-plugin/plugin.json` and the root `.claude-plugin/marketplace.json` when making substantive changes
+- [ ] Ensure version numbers match between the plugin's `plugin.json` and its entry in the root `.claude-plugin/marketplace.json`
+
+## Getting Help
+
+<Note>
+For Claude: Use the `claude-code-guide` subagent for plugin/skill questions - it has access to official documentation.
+</Note>
+
+If you have questions or need help:
+
+1. Review the [official Anthropic documentation](https://code.claude.com/docs/en/plugins)
+2. Study the [reference examples](/contributing/examples)
+3. Check existing plugins in the repository
+4. Ask in the GitHub Discussions or open an issue
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Skill Authoring" icon="book" href="/contributing/skill-authoring">
+    Learn how to write effective skills
+  </Card>
+  <Card title="Plugin Structure" icon="folder-tree" href="/contributing/plugin-structure">
+    Understand the required directory structure
+  </Card>
+  <Card title="Best Practices" icon="star" href="/contributing/best-practices">
+    Follow Trail of Bits quality standards
+  </Card>
+  <Card title="Examples" icon="code" href="/contributing/examples">
+    See real-world skill examples
+  </Card>
+</CardGroup>

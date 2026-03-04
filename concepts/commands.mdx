@@ -1,0 +1,510 @@
+---
+title: "Commands"
+description: "Slash commands that trigger workflows and invoke skills"
+---
+
+## What are Commands?
+
+Commands are slash commands (e.g., `/ct-check`) that provide quick entry points to specific workflows. They parse arguments, validate inputs, and invoke skills or agents with the right context.
+
+<Tip>
+Commands are the user-facing API for your plugin. They should be memorable, concise, and clearly describe what they do.
+</Tip>
+
+## Command Structure
+
+Commands are markdown files in the `commands/` directory with YAML frontmatter:
+
+```
+plugins/my-plugin/
+  commands/
+    command-name.md       # Command implementation
+    another-command.md    # Additional commands
+```
+
+## Frontmatter Format
+
+```yaml command-name.md
+---
+name: namespace:command-name
+description: Brief description of what the command does
+argument-hint: "<required-arg> [optional-arg] [--flag]"
+allowed-tools:
+  - Bash
+  - Read
+  - Grep
+---
+```
+
+### Frontmatter Fields
+
+<ParamField path="name" type="string" required>
+  Command name with optional namespace. Format: `namespace:command-name` or just `command-name`.
+  
+  **Examples:**
+  - `trailofbits:ct-check` (namespaced)
+  - `scan-apk` (no namespace)
+</ParamField>
+
+<ParamField path="description" type="string" required>
+  Brief description shown in command palette and help text.
+</ParamField>
+
+<ParamField path="argument-hint" type="string">
+  Argument syntax shown to users. Use angle brackets for required args, square brackets for optional.
+  
+  **Example:** `"<source-file> [--warnings] [--json] [--arch <arch>]"`
+</ParamField>
+
+<ParamField path="allowed-tools" type="array">
+  List of tools the command can use. Same as skill `allowed-tools`.
+</ParamField>
+
+## Command Body
+
+The markdown body contains instructions for Claude on how to handle the command:
+
+```markdown command-name.md
+---
+name: trailofbits:ct-check
+description: Detects timing side-channels in cryptographic code
+argument-hint: "<source-file> [--warnings] [--json] [--arch <arch>]"
+allowed-tools:
+  - Bash
+  - Read
+  - Grep
+  - Glob
+---
+
+# Check Constant-Time Properties
+
+**Arguments:** $ARGUMENTS
+
+Parse arguments:
+1. **Source file** (required): Path to source file to analyze
+2. **Flags** (optional): `--warnings`, `--json`, `--arch <arch>`, `--opt-level <level>`, `--func <pattern>`
+
+Invoke the `constant-time-analysis` skill with these arguments for the full workflow.
+```
+
+<Note>
+Use `$ARGUMENTS` to reference the arguments passed by the user.
+</Note>
+
+## Argument Parsing Patterns
+
+### Simple Arguments
+
+```markdown
+**Arguments:** $ARGUMENTS
+
+Parse arguments:
+1. **File path** (required): Path to the file to process
+2. **Output format** (optional): `--json` or `--text` (default: text)
+```
+
+### Complex Arguments with Validation
+
+```markdown
+**Arguments:** $ARGUMENTS
+
+Parse and validate arguments:
+
+1. **Required: Base branch**
+   - Format: `main`, `develop`, or any valid branch name
+   - Validate: Branch must exist in repository
+
+2. **Required: Head branch**
+   - Format: Branch name or commit SHA
+   - Validate: Must exist and be different from base
+
+3. **Optional flags:**
+   - `--security-focus`: Prioritize security-relevant changes
+   - `--verbose`: Include detailed analysis
+   - `--format <json|markdown>`: Output format (default: markdown)
+
+Validation steps:
+1. Verify both branches exist: `git rev-parse --verify <branch>`
+2. Verify branches are different
+3. Check for uncommitted changes if analyzing current branch
+```
+
+### Multiple Argument Forms
+
+```markdown
+**Arguments:** $ARGUMENTS
+
+Supports multiple forms:
+
+**Form 1: File path**
+```
+/entry-points [file-path]
+```
+
+**Form 2: Directory scan**
+```
+/entry-points [directory] --recursive
+```
+
+**Form 3: Package analysis**
+```
+/entry-points --package [package-name]
+```
+
+Parse based on first argument type:
+- If path to file: analyze single file
+- If path to directory: scan directory (use --recursive for subdirectories)
+- If --package flag: analyze installed package
+```
+
+## Invoking Skills
+
+Commands typically invoke skills to perform the actual work:
+
+```markdown
+After parsing arguments, invoke the `skill-name` skill with the parsed context:
+
+- Source file: [parsed file path]
+- Analysis mode: [parsed mode]
+- Output format: [parsed format]
+```
+
+Example from `ct-check.md`:
+
+```markdown
+Invoke the `constant-time-analysis` skill with these arguments for the full workflow.
+```
+
+## Invoking Agents
+
+Commands can also launch autonomous agents:
+
+```markdown
+Launch the `agent-name` agent with:
+- Input: [parsed input]
+- Configuration: [parsed config]
+- Output path: [parsed output]
+```
+
+## Real Examples
+
+<AccordionGroup>
+  <Accordion title="ct-check (Simple Skill Invocation)">
+    ```yaml
+    ---
+    name: trailofbits:ct-check
+    description: Detects timing side-channels in cryptographic code
+    argument-hint: "<source-file> [--warnings] [--json] [--arch <arch>]"
+    allowed-tools:
+      - Bash
+      - Read
+      - Grep
+      - Glob
+    ---
+    
+    # Check Constant-Time Properties
+    
+    **Arguments:** $ARGUMENTS
+    
+    Parse arguments:
+    1. **Source file** (required): Path to source file to analyze
+    2. **Flags** (optional): `--warnings`, `--json`, `--arch <arch>`, 
+       `--opt-level <level>`, `--func <pattern>`
+    
+    Invoke the `constant-time-analysis` skill with these arguments for the 
+    full workflow.
+    ```
+  </Accordion>
+
+  <Accordion title="diff-review (Agent Launcher)">
+    ```yaml
+    ---
+    name: diff-review
+    description: Performs differential security review between two git branches
+    argument-hint: "<base-branch> <head-branch> [--security-focus]"
+    allowed-tools:
+      - Bash
+      - Read
+      - Grep
+      - Glob
+      - Write
+    ---
+    
+    # Differential Security Review
+    
+    **Arguments:** $ARGUMENTS
+    
+    Parse arguments:
+    1. **Base branch** (required): The baseline branch (e.g., `main`)
+    2. **Head branch** (required): The branch with changes to review
+    3. **Flags** (optional):
+       - `--security-focus`: Prioritize security-relevant changes
+       - `--verbose`: Include detailed analysis
+    
+    Validation:
+    1. Verify both branches exist
+    2. Check for uncommitted changes
+    3. Verify branches are different
+    
+    Launch the `differential-reviewer` agent with the parsed configuration.
+    ```
+  </Accordion>
+
+  <Accordion title="entry-points (Multiple Forms)">
+    ```yaml
+    ---
+    name: entry-points
+    description: Analyzes entry points in code to map attack surface
+    argument-hint: "<file-or-directory> [--recursive] [--format <json|text>]"
+    allowed-tools:
+      - Bash
+      - Read
+      - Grep
+      - Glob
+      - Write
+    ---
+    
+    # Analyze Entry Points
+    
+    **Arguments:** $ARGUMENTS
+    
+    Supports:
+    - Single file: `/entry-points src/main.rs`
+    - Directory: `/entry-points src/`
+    - Recursive: `/entry-points src/ --recursive`
+    
+    Parse arguments:
+    1. **Target** (required): File path or directory path
+    2. **Flags** (optional):
+       - `--recursive`: Scan subdirectories
+       - `--format <json|text>`: Output format (default: text)
+       - `--filter <pattern>`: Filter by function name pattern
+    
+    Invoke the `entry-point-analyzer` skill with parsed configuration.
+    ```
+  </Accordion>
+
+  <Accordion title="audit-context (Complex Workflow)">
+    ```yaml
+    ---
+    name: audit-context
+    description: Builds comprehensive security audit context for a codebase
+    argument-hint: "<target-directory> [--depth <1|2|3>] [--focus <area>]"
+    allowed-tools:
+      - Bash
+      - Read
+      - Grep
+      - Glob
+      - Write
+    ---
+    
+    # Build Audit Context
+    
+    **Arguments:** $ARGUMENTS
+    
+    Parse arguments:
+    1. **Target directory** (required): Root directory to analyze
+    2. **Analysis depth** (optional): 
+       - `--depth 1`: High-level overview
+       - `--depth 2`: Detailed analysis (default)
+       - `--depth 3`: Ultra-granular per-function analysis
+    3. **Focus area** (optional): `--focus <crypto|auth|network|storage>`
+    
+    Workflow:
+    1. Validate target directory exists
+    2. Determine analysis depth
+    3. Launch the `audit-context-builder` agent
+    4. If depth=3, also launch `function-analyzer` agent for critical paths
+    5. Generate consolidated report
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Command Naming
+
+<CardGroup cols={2}>
+  <Card title="Use Namespaces" icon="folder-tree">
+    **For organization-wide plugins:**
+    
+    `trailofbits:ct-check`
+    
+    **For personal/project plugins:**
+    
+    `scan-apk`
+  </Card>
+
+  <Card title="Be Descriptive" icon="file-signature">
+    **Good:**
+    - `diff-review`
+    - `entry-points`
+    - `audit-context`
+    
+    **Bad:**
+    - `dr`
+    - `ep`
+    - `check`
+  </Card>
+
+  <Card title="Use Verbs" icon="play">
+    **Good:**
+    - `scan-apk`
+    - `analyze-contract`
+    - `review-diff`
+    
+    **Bad:**
+    - `apk`
+    - `contract`
+    - `diff`
+  </Card>
+
+  <Card title="Keep It Short" icon="compress">
+    **Good:**
+    - `ct-check` (constant-time check)
+    - `diff-review`
+    
+    **Avoid:**
+    - `constant-time-analysis-check`
+    - `differential-security-review`
+  </Card>
+</CardGroup>
+
+## Argument Hint Best Practices
+
+Argument hints show users the expected syntax. Follow these conventions:
+
+<Tabs>
+  <Tab title="Required Arguments">
+    Use angle brackets: `<argument-name>`
+    
+    ```
+    "<source-file>"
+    "<base-branch> <head-branch>"
+    ```
+  </Tab>
+
+  <Tab title="Optional Arguments">
+    Use square brackets: `[argument-name]`
+    
+    ```
+    "[--format <json|text>]"
+    "<file-path> [--recursive]"
+    ```
+  </Tab>
+
+  <Tab title="Flags">
+    Prefix with `--`: `[--flag-name]`
+    
+    ```
+    "[--verbose] [--security-focus]"
+    ```
+  </Tab>
+
+  <Tab title="Flag Values">
+    Show choices with `|`: `[--format <json|text|markdown>]`
+    
+    ```
+    "<source> [--arch <x86|arm|mips>]"
+    ```
+  </Tab>
+</Tabs>
+
+## Command Discovery
+
+Users discover commands through:
+
+1. **Command palette** - Shows all available commands with descriptions
+2. **Autocomplete** - Typing `/` shows command suggestions
+3. **Help text** - `--help` flag shows argument hints
+
+Make sure your `description` and `argument-hint` are clear and informative.
+
+## Error Handling
+
+Provide clear error messages when arguments are invalid:
+
+```markdown
+Validation steps:
+1. If source file not provided:
+   → Error: "Source file is required. Usage: /ct-check <source-file> [options]"
+
+2. If source file doesn't exist:
+   → Error: "File not found: {file-path}"
+
+3. If invalid --arch value:
+   → Error: "Invalid architecture: {arch}. Supported: x86, arm, mips"
+
+4. If conflicting flags:
+   → Error: "Cannot use --json and --text together. Choose one output format."
+```
+
+## Testing Commands
+
+<Steps>
+  <Step title="Test with minimal arguments">
+    ```
+    /command-name required-arg
+    ```
+  </Step>
+
+  <Step title="Test with all arguments">
+    ```
+    /command-name required-arg --flag1 --flag2 value
+    ```
+  </Step>
+
+  <Step title="Test error cases">
+    ```
+    /command-name           # Missing required arg
+    /command-name invalid   # Invalid arg value
+    /command-name arg --invalid-flag
+    ```
+  </Step>
+
+  <Step title="Test edge cases">
+    ```
+    /command-name "path with spaces"
+    /command-name ../relative/path
+    /command-name /absolute/path
+    ```
+  </Step>
+</Steps>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Keep It Simple" icon="hand-sparkles">
+    Most commands should just parse arguments and invoke a skill or agent.
+  </Card>
+
+  <Card title="Validate Early" icon="shield-check">
+    Check arguments before invoking expensive operations.
+  </Card>
+
+  <Card title="Provide Defaults" icon="sliders">
+    Make optional arguments truly optional with sensible defaults.
+  </Card>
+
+  <Card title="Clear Errors" icon="circle-exclamation">
+    Show helpful error messages with usage examples.
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Skills" icon="brain" href="/concepts/skills">
+    Learn how skills provide the logic commands invoke
+  </Card>
+
+  <Card title="Agents" icon="robot" href="/concepts/agents">
+    Understand autonomous agents launched by commands
+  </Card>
+
+  <Card title="Create a Command" icon="code" href="/guides/creating-commands">
+    Step-by-step guide to building commands
+  </Card>
+
+  <Card title="Command Examples" icon="book" href="/examples/commands">
+    Browse real command implementations
+  </Card>
+</CardGroup>

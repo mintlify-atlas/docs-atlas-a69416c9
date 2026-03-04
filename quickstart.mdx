@@ -1,80 +1,275 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start
+description: Get up and running with Trail of Bits Skills in minutes
 ---
 
-## Get started in three steps
+This guide will walk you through installing the marketplace, browsing available plugins, and using your first skill.
 
-Get your documentation site running locally and make your first customization.
+## Step 1: Add the Marketplace
 
-### Step 1: Set up your local environment
+Run this command in Claude Code to add the Trail of Bits Skills marketplace:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+```bash
+/plugin marketplace add trailofbits/skills
+```
+
+<Check>
+  You should see a confirmation that the marketplace was added successfully.
+</Check>
+
+## Step 2: Browse Available Plugins
+
+Open the plugin menu to see all available plugins:
+
+```bash
+/plugin menu
+```
+
+You'll see 40+ plugins organized by category:
+
+- **Smart Contract Security** - Vulnerability scanners for 6 blockchains
+- **Code Auditing** - Static analysis, differential review, variant analysis
+- **Malware Analysis** - YARA rule authoring
+- **Verification** - Property-based testing, constant-time analysis
+- **Development** - Modern Python, devcontainers, GitHub CLI integration
+- **And more...**
+
+## Step 3: Install Your First Plugin
+
+Let's start with a versatile plugin that's useful for many workflows. We'll install the **static-analysis** plugin, which provides CodeQL, Semgrep, and SARIF parsing capabilities.
+
+<Steps>
+  <Step title="Install the Plugin">
+    ```bash
+    /plugin install trailofbits/skills/plugins/static-analysis
+    ```
+  </Step>
+  
+  <Step title="Verify Installation">
+    The plugin should now be active. You can verify by checking the plugin menu again or by trying to use one of its skills.
+  </Step>
+  
+  <Step title="Use a Skill">
+    Try using the Semgrep skill to scan for security issues:
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    ```
+    Use the semgrep skill to scan this codebase for OWASP Top 10 vulnerabilities
+    ```
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+    Claude will now have access to specialized knowledge about running Semgrep scans, including which rulesets to use and how to interpret results.
+  </Step>
+</Steps>
 
-### Step 2: Deploy your changes
+## Example Workflows by Use Case
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+Choose a workflow based on what you're trying to accomplish:
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+<Tabs>
+  <Tab title="Smart Contract Audit">
+    <Steps>
+      <Step title="Install Building Secure Contracts">
+        ```bash
+        /plugin install trailofbits/skills/plugins/building-secure-contracts
+        ```
+      </Step>
+      
+      <Step title="Run Platform-Specific Scanner">
+        For Solidity contracts:
+        ```
+        Use the secure-workflow-guide skill to run comprehensive security checks on my Solidity contracts
+        ```
+      </Step>
+      
+      <Step title="Check for Vulnerabilities">
+        ```
+        Use the appropriate vulnerability scanner for my codebase to detect platform-specific issues
+        ```
+      </Step>
+    </Steps>
+  </Tab>
+  
+  <Tab title="Security Code Review">
+    <Steps>
+      <Step title="Install Static Analysis">
+        ```bash
+        /plugin install trailofbits/skills/plugins/static-analysis
+        ```
+      </Step>
+      
+      <Step title="Run CodeQL Analysis">
+        ```
+        Use the codeql skill to create a database and run security-extended queries on this Python codebase
+        ```
+      </Step>
+      
+      <Step title="Parse Results">
+        ```
+        Use the sarif-parsing skill to aggregate and deduplicate findings from the SARIF output
+        ```
+      </Step>
+    </Steps>
+  </Tab>
+  
+  <Tab title="Differential Review">
+    <Steps>
+      <Step title="Install Differential Review">
+        ```bash
+        /plugin install trailofbits/skills/plugins/differential-review
+        ```
+      </Step>
+      
+      <Step title="Review Code Changes">
+        ```
+        /diff-review
+        ```
+        
+        This command performs security-focused differential review of code changes with git history analysis.
+      </Step>
+      
+      <Step title="Assess Blast Radius">
+        The skill will analyze the security impact and blast radius of your changes.
+      </Step>
+    </Steps>
+  </Tab>
+  
+  <Tab title="Modern Python Project">
+    <Steps>
+      <Step title="Install Modern Python">
+        ```bash
+        /plugin install trailofbits/skills/plugins/modern-python
+        ```
+      </Step>
+      
+      <Step title="Set Up New Project">
+        ```
+        Use the modern-python skill to create a new Python project with uv, ruff, and pytest
+        ```
+      </Step>
+      
+      <Step title="Apply Best Practices">
+        The skill will guide you through modern Python tooling and best practices.
+      </Step>
+    </Steps>
+  </Tab>
+</Tabs>
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+## Understanding Plugin Components
 
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
+Plugins can include multiple types of components:
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Skills" icon="brain">
+    **Knowledge and guidance** that Claude can invoke when needed. Skills provide specialized expertise without requiring explicit commands.
+    
+    Example: The `constant-time-analysis` skill teaches Claude how to detect timing side-channels in cryptographic code.
+  </Card>
+  
+  <Card title="Commands" icon="terminal">
+    **Slash commands** you run explicitly to trigger specific workflows.
+    
+    Example: `/diff-review` runs security-focused differential review of code changes.
+  </Card>
+  
+  <Card title="Agents" icon="robot">
+    **Autonomous agents** that perform specialized tasks with restricted tool access.
+    
+    Example: The `semgrep-scanner` agent executes parallel Semgrep scans for a language category.
+  </Card>
+  
+  <Card title="Hooks" icon="hook">
+    **Event hooks** that intercept and modify behavior automatically.
+    
+    Example: The `gh-cli` hook intercepts GitHub URL fetches and redirects to the authenticated `gh` CLI.
+  </Card>
 </CardGroup>
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+## Popular Plugin Recommendations
+
+Based on your role, here are recommended starting points:
+
+<AccordionGroup>
+  <Accordion title="For Security Auditors">
+    1. **static-analysis** - CodeQL, Semgrep, SARIF parsing
+    2. **building-secure-contracts** - Smart contract security toolkit
+    3. **differential-review** - Security-focused code change analysis
+    4. **variant-analysis** - Find similar vulnerabilities across codebases
+    5. **fp-check** - False positive verification with gate reviews
+  </Accordion>
+
+  <Accordion title="For Smart Contract Developers">
+    1. **building-secure-contracts** - Comprehensive security toolkit for 6 blockchains
+    2. **entry-point-analyzer** - Identify state-changing entry points
+    3. **property-based-testing** - Property-based testing for smart contracts
+    4. **spec-to-code-compliance** - Specification compliance checking
+  </Accordion>
+
+  <Accordion title="For Security Researchers">
+    1. **yara-authoring** - YARA rule authoring with linting and analysis
+    2. **constant-time-analysis** - Timing side-channel detection
+    3. **zeroize-audit** - Detect missing secret zeroization
+    4. **firebase-apk-scanner** - Firebase security misconfiguration scanning
+    5. **supply-chain-risk-auditor** - Supply chain threat landscape analysis
+  </Accordion>
+
+  <Accordion title="For Developers">
+    1. **modern-python** - Modern Python tooling (uv, ruff, pytest)
+    2. **gh-cli** - GitHub CLI integration
+    3. **devcontainer-setup** - Pre-configured development containers
+    4. **git-cleanup** - Safely clean up branches and worktrees
+    5. **second-opinion** - Code reviews using external LLMs
+  </Accordion>
+</AccordionGroup>
+
+## Tips for Success
+
+<Tip>
+  **Start small** - Install one or two plugins that match your immediate needs. You can always add more later.
+</Tip>
+
+<Tip>
+  **Read plugin READMEs** - Each plugin has documentation explaining its skills, commands, and example workflows.
+</Tip>
+
+<Tip>
+  **Combine plugins** - Many plugins work well together. For example, use `static-analysis` to find issues, then `variant-analysis` to find similar patterns.
+</Tip>
+
+<Tip>
+  **Check the Trophy Case** - See [real vulnerabilities found using these skills](https://github.com/trailofbits/skills#trophy-case) for inspiration.
+</Tip>
+
+## Common Commands Reference
+
+| Command | Description |
+|---------|-------------|
+| `/plugin marketplace add trailofbits/skills` | Add the Trail of Bits marketplace |
+| `/plugin menu` | Browse available plugins |
+| `/plugin install <plugin-path>` | Install a specific plugin |
+| `/plugin list` | List installed plugins |
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="Explore All Plugins" icon="grid" href="/plugins">
+    Browse the complete catalog of 40+ plugins with detailed descriptions
+  </Card>
+  
+  <Card title="Plugin Categories" icon="folder-tree" href="/categories">
+    Explore plugins by category: Smart Contract Security, Code Auditing, Verification, and more
+  </Card>
+  
+  <Card title="Trophy Case" icon="trophy" href="/trophy-case">
+    See real vulnerabilities discovered using Trail of Bits Skills
+  </Card>
+  
+  <Card title="Contributing" icon="code-pull-request" href="/contributing">
+    Learn how to author your own skills and contribute to the marketplace
+  </Card>
+</CardGroup>
+
+## Need Help?
+
+- **GitHub Repository** - [trailofbits/skills](https://github.com/trailofbits/skills)
+- **Report Issues** - [GitHub Issues](https://github.com/trailofbits/skills/issues)
+- **Contributing Guide** - See [CLAUDE.md](https://github.com/trailofbits/skills/blob/main/CLAUDE.md)
+- **Trail of Bits** - [www.trailofbits.com](https://www.trailofbits.com/)

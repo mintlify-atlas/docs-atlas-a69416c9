@@ -1,0 +1,380 @@
+---
+title: "DWARF Expert"
+description: "Interact with and analyze DWARF debug files, understand the DWARF standard, and write code that parses DWARF data"
+---
+
+Provides expertise for analyzing DWARF debug files and understanding the DWARF debug format/standard (v3-v5). Helps you work with DWARF information in compiled binaries.
+
+**Author:** Evan Hellman
+
+## Installation
+
+```bash
+/plugin install trailofbits/skills/plugins/dwarf-expert
+```
+
+## When to Use
+
+Use this plugin when you need to:
+
+- Understand or parse DWARF debug information from compiled binaries
+- Answer questions about the DWARF standard (v3, v4, v5)
+- Write or review code that interacts with DWARF data
+- Use `dwarfdump` or `readelf` to extract debug information
+- Verify DWARF data integrity using `llvm-dwarfdump --verify`
+- Work with DWARF parsing libraries (libdwarf, pyelftools, gimli, etc.)
+
+## When NOT to Use
+
+<Warning>
+This plugin is **NOT** suitable for:
+</Warning>
+
+- **DWARF v1/v2 Analysis** - Expertise limited to versions 3, 4, and 5
+- **General ELF Parsing** - Use standard ELF tools if DWARF data isn't needed
+- **Executable Debugging** - Use dedicated debugging tools (gdb, lldb) for runtime behavior
+- **Binary Reverse Engineering** - Use dedicated RE tools (Ghidra, IDA) unless specifically analyzing DWARF sections
+- **Compiler Debugging** - DWARF generation issues are compiler-specific, not covered here
+
+## Authoritative Sources
+
+The plugin uses these authoritative sources for DWARF standard information:
+
+<CardGroup cols={3}>
+  <Card title="dwarfstd.org" icon="book">
+    Official DWARF specification via web search
+  </Card>
+  
+  <Card title="LLVM Source" icon="code">
+    Reference implementations in `llvm/lib/DebugInfo/DWARF/`
+  </Card>
+  
+  <Card title="libdwarf" icon="brackets-curly">
+    Reference C implementation at github.com/davea42/libdwarf-code
+  </Card>
+</CardGroup>
+
+### Key LLVM Reference Files
+
+- `DWARFDie.cpp` - DIE handling and attribute access
+- `DWARFUnit.cpp` - Compilation unit parsing
+- `DWARFDebugLine.cpp` - Line number information
+- `DWARFVerifier.cpp` - Validation logic
+
+## Verification Workflows
+
+### Structural Validation
+
+Validate DWARF data integrity using `llvm-dwarfdump`:
+
+<CodeGroup>
+```bash Basic Verification
+llvm-dwarfdump --verify <binary>
+```
+
+```bash Detailed Errors
+llvm-dwarfdump --verify --error-display=full <binary>
+```
+
+```bash JSON Error Summary
+llvm-dwarfdump --verify --verify-json=errors.json <binary>
+```
+
+```bash Quality Metrics
+llvm-dwarfdump --statistics <binary>
+```
+</CodeGroup>
+
+### Common Verification Patterns
+
+<AccordionGroup>
+  <Accordion title="After compilation">
+    Verify binaries have valid DWARF before distribution
+    
+    ```bash
+    llvm-dwarfdump --verify --quiet myapp
+    echo $?  # 0 = success, non-zero = errors found
+    ```
+  </Accordion>
+
+  <Accordion title="Comparing builds">
+    Use `--statistics` to detect debug info quality regressions
+    
+    ```bash
+    llvm-dwarfdump --statistics build1/myapp > stats1.json
+    llvm-dwarfdump --statistics build2/myapp > stats2.json
+    jq -s '.[0] - .[1]' stats1.json stats2.json
+    ```
+  </Accordion>
+
+  <Accordion title="Debugging debuggers">
+    Identify malformed DWARF causing debugger issues
+    
+    ```bash
+    llvm-dwarfdump --verify --error-display=full problematic_binary
+    ```
+  </Accordion>
+
+  <Accordion title="DWARF tool development">
+    Validate parser output against known-good binaries
+    
+    ```bash
+    llvm-dwarfdump --verify --verify-json=errors.json test_binary
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Parsing DWARF Information
+
+### Using dwarfdump
+
+The primary tool for parsing and displaying DWARF information. More effective than `readelf` for DWARF-specific tasks.
+
+<Tabs>
+  <Tab title="Basic Usage">
+    ```bash
+    # Display version (check if libdwarf or LLVM implementation)
+    dwarfdump --version
+    
+    # Dump all DWARF sections
+    dwarfdump --all myapp
+    
+    # Dump specific section
+    dwarfdump --debug-info myapp
+    ```
+  </Tab>
+  
+  <Tab title="Searching">
+    ```bash
+    # Search by name (accelerator tables - fast)
+    dwarfdump --find=function_name myapp
+    
+    # Exhaustive name search with regex
+    dwarfdump --name 'my_func.*' --regex myapp
+    
+    # Case-insensitive search
+    dwarfdump --name myFunc --ignore-case myapp
+    
+    # Find DIE by address
+    dwarfdump --lookup=0x1234 myapp
+    ```
+  </Tab>
+  
+  <Tab title="Displaying Context">
+    ```bash
+    # Show children of DIE (e.g., function parameters)
+    dwarfdump --name my_function --show-children myapp
+    
+    # Limit child depth
+    dwarfdump --name my_function --show-children --recurse-depth=2 myapp
+    
+    # Show parent context
+    dwarfdump --lookup=0x1234 --show-parents myapp
+    
+    # Show DWARF form types
+    dwarfdump --debug-info --show-form myapp
+    ```
+  </Tab>
+</Tabs>
+
+### Using readelf
+
+For general ELF information, but prefer `dwarfdump` for DWARF-specific parsing.
+
+```bash
+# Display all debug sections
+readelf --debug-dump myapp
+
+# Display specific section
+readelf --debug-dump=info myapp
+```
+
+## Working With Code
+
+### Common DWARF Libraries
+
+<ResponseField name="libdwarf" type="C/C++">
+  Offers a simpler, lower-level interface. Used to implement `dwarfdump`.
+  
+  **URL:** https://github.com/davea42/libdwarf-code
+</ResponseField>
+
+<ResponseField name="pyelftools" type="Python">
+  Also supports parsing of ELF files in general.
+  
+  **URL:** https://github.com/eliben/pyelftools
+</ResponseField>
+
+<ResponseField name="gimli" type="Rust">
+  Designed for performant access to DWARF data. May require other dependencies (such as `object`) to open and parse entire DWARF files.
+  
+  **URL:** https://github.com/gimli-rs/gimli
+</ResponseField>
+
+<ResponseField name="debug/dwarf" type="Go">
+  Standard library built-in.
+  
+  **URL:** https://github.com/golang/go/tree/master/src/debug/dwarf
+</ResponseField>
+
+<ResponseField name="LibObjectFile" type=".NET">
+  Also supports interfacing with object files (ELF, PE/COFF, etc) in general.
+  
+  **URL:** https://github.com/xoofx/LibObjectFile
+</ResponseField>
+
+### Code Writing Guidelines
+
+<Steps>
+  <Step title="Prefer Python for scripting">
+    Use Python for simpler DWARF code unless another language is specified
+  </Step>
+  
+  <Step title="Leverage existing libraries">
+    Use libraries listed above rather than parsing from scratch
+  </Step>
+  
+  <Step title="Refer to library documentation">
+    Check both in-code and online documentation when using libraries
+  </Step>
+  
+  <Step title="Rely on authoritative sources">
+    Use dwarfstd.org specifications or LLVM/libdwarf source for ground truth
+  </Step>
+</Steps>
+
+### Code Review Guidelines
+
+When reviewing DWARF-related code, consider:
+
+- **Edge Cases**: Unhandled DIE node types, abstract base DIE nodes, specification DIE nodes
+- **Optional Attributes**: Ensure code handles missing optional attributes gracefully
+- **Special DIE Types**: Abstract origins, inlined instances, template instantiations
+- **Only Suggest Changes**: Don't modify code during review unless explicitly asked
+
+## Advanced Searching
+
+### Simple Search
+
+For name matches or address lookups:
+
+```bash
+dwarfdump --find=my_function myapp
+dwarfdump --lookup=0x401000 myapp
+```
+
+### Complex Search
+
+For complex queries, combine `dwarfdump` with filtering tools:
+
+<Steps>
+  <Step title="Initial filtering">
+    ```bash
+    dwarfdump myapp | grep "float \*"
+    ```
+  </Step>
+  
+  <Step title="Get DIE address">
+    ```bash
+    dwarfdump myapp | grep -B 5 "float \*"
+    ```
+  </Step>
+  
+  <Step title="Refine filtering">
+    ```bash
+    dwarfdump myapp | grep -B 5 "float \*" | grep "DW_TAG_formal_parameter"
+    ```
+  </Step>
+  
+  <Step title="Print complete DWARF info">
+    ```bash
+    dwarfdump --lookup=0x1234 --show-children myapp
+    ```
+  </Step>
+</Steps>
+
+### Scripted Search
+
+For highly complex queries, write a Python script using `pyelftools`:
+
+```python
+from elftools.elf.elffile import ELFFile
+from elftools.dwarf.die import DIE
+
+with open('myapp', 'rb') as f:
+    elffile = ELFFile(f)
+    if not elffile.has_dwarf_info():
+        print('No DWARF info')
+        exit(1)
+    
+    dwarfinfo = elffile.get_dwarf_info()
+    for CU in dwarfinfo.iter_CUs():
+        for DIE in CU.iter_DIEs():
+            # Custom search logic here
+            if DIE.tag == 'DW_TAG_formal_parameter':
+                # Check attributes, print matches, etc.
+                pass
+```
+
+## Decision Tree
+
+Use this to choose your approach:
+
+```
+┌─ Need to verify DWARF data integrity?
+│   └─ Use `llvm-dwarfdump --verify`
+├─ Need to answer questions about the DWARF standard?
+│   └─ Search dwarfstd.org or reference LLVM/libdwarf source
+├─ Need simple section dump or general ELF info?
+│   └─ Use `readelf`
+├─ Need to parse, search, and/or dump DWARF DIE nodes?
+│   └─ Use `dwarfdump`
+└─ Need to write, modify, or review code that interacts with DWARF data?
+    └─ Use appropriate library (pyelftools, libdwarf, gimli, etc.)
+```
+
+## Examples
+
+<Tabs>
+  <Tab title="Find Function Parameters">
+    ```bash
+    # Find all parameters of a specific function
+    dwarfdump --name my_function --show-children --recurse-depth=1 myapp
+    ```
+  </Tab>
+  
+  <Tab title="Verify Binary">
+    ```bash
+    # Check if binary has valid DWARF
+    llvm-dwarfdump --verify myapp
+    if [ $? -eq 0 ]; then
+        echo "DWARF is valid"
+    else
+        echo "DWARF has errors"
+    fi
+    ```
+  </Tab>
+  
+  <Tab title="Compare Debug Info">
+    ```bash
+    # Compare debug info between two builds
+    diff <(llvm-dwarfdump --statistics build1/myapp) \
+         <(llvm-dwarfdump --statistics build2/myapp)
+    ```
+  </Tab>
+  
+  <Tab title="Extract Line Numbers">
+    ```bash
+    # Dump line number information
+    dwarfdump --debug-line myapp
+    ```
+  </Tab>
+</Tabs>
+
+<Tip>
+  When searching for specific DIE nodes, start with `--find` (fast accelerator table lookup) and fall back to `--name` (exhaustive search) if needed.
+</Tip>
+
+<Note>
+  The `--statistics` output is useful for comparing debug info quality across compiler versions and optimization levels.
+</Note>

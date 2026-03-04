@@ -1,0 +1,455 @@
+---
+title: Modern Python
+description: Modern Python tooling with uv, ruff, ty, and pytest
+icon: python
+---
+
+<Info>
+Modern Python best practices using uv, ruff, ty, and pytest. Based on Trail of Bits [cookiecutter-python](https://github.com/trailofbits/cookiecutter-python) template.
+</Info>
+
+## Overview
+
+The Modern Python skill teaches Claude to use fast, modern Python tooling instead of legacy tools. It includes a **SessionStart hook** that intercepts bare `python`, `pip`, and `pipx` commands, redirecting to `uv` equivalents.
+
+**Author:** William Tan
+
+## Core Tools
+
+| Tool | Purpose | Replaces |
+|------|---------|----------|
+| **uv** | Package/dependency management | pip, virtualenv, pip-tools, pipx, pyenv |
+| **ruff** | Linting AND formatting | flake8, black, isort, pyupgrade, pydocstyle |
+| **ty** | Type checking | mypy, pyright |
+| **pytest** | Testing with coverage | unittest |
+| **prek** | Pre-commit hooks | pre-commit (faster, Rust-native) |
+
+## Security Tools
+
+| Tool | Purpose | When It Runs |
+|------|---------|------------|
+| **shellcheck** | Shell script linting | pre-commit |
+| **detect-secrets** | Secret detection | pre-commit |
+| **actionlint** | Workflow syntax validation | pre-commit, CI |
+| **zizmor** | Workflow security audit | pre-commit, CI |
+| **pip-audit** | Dependency vulnerability scanning | CI, manual |
+| **Dependabot** | Automated dependency updates | scheduled |
+
+## When to Use
+
+- Setting up a new Python project with modern tooling
+- Replacing pip/virtualenv with uv for faster dependency management
+- Replacing flake8/black/isort with ruff for unified linting/formatting
+- Replacing mypy with ty for faster type checking
+- Adding pre-commit hooks and security scanning
+- Writing Python scripts with external dependencies (PEP 723)
+
+## Installation
+
+```bash
+/plugin install trailofbits/skills/plugins/modern-python
+```
+
+## Legacy Command Interception
+
+This plugin includes a **SessionStart hook** that intercepts legacy Python commands:
+
+| Intercepted Command | Suggested Alternative |
+|---------------------|----------------------|
+| `python ...` | `uv run python ...` |
+| `python -m module` | `uv run python -m module` |
+| `python -m pip` | `uv add`/`uv remove` |
+| `pip install pkg` | `uv add pkg` or `uv run --with pkg` |
+| `pip uninstall pkg` | `uv remove pkg` |
+| `pip freeze` | `uv export` |
+| `uv pip ...` | `uv add`/`uv remove`/`uv sync` |
+| `pipx install <pkg>` | `uv tool install <pkg>` |
+| `pipx run <pkg>` | `uvx <pkg>` |
+| `pipx uninstall <pkg>` | `uv tool uninstall <pkg>` |
+| `pipx upgrade <pkg>` | `uv tool upgrade <pkg>` |
+| `pipx upgrade-all` | `uv tool upgrade --all` |
+
+<Note>
+Commands like `grep python`, `which python`, and `cat python.txt` work normally because `python` is a shell argument, not the command being invoked.
+</Note>
+
+## Quick Start: Minimal Project
+
+For simple multi-file projects not intended for distribution:
+
+```bash
+# Create project with uv
+uv init myproject
+cd myproject
+
+# Add dependencies
+uv add requests rich
+
+# Add dev dependencies
+uv add --group dev pytest ruff ty
+
+# Run code
+uv run python src/myproject/main.py
+
+# Run tools
+uv run pytest
+uv run ruff check .
+```
+
+## Full Project Setup
+
+<Steps>
+  <Step title="Use Cookiecutter Template (Recommended)">
+    The Trail of Bits cookiecutter template bootstraps a complete project:
+    
+    ```bash
+    uvx cookiecutter gh:trailofbits/cookiecutter-python
+    ```
+    
+    This creates a project with:
+    - `pyproject.toml` fully configured
+    - `src/` layout
+    - Dependency groups for dev/test/docs
+    - Pre-commit hooks
+    - GitHub Actions CI
+    - Security scanning
+  </Step>
+  
+  <Step title="Manual Setup (Alternative)">
+    Create project structure:
+    
+    ```bash
+    uv init --package myproject
+    cd myproject
+    ```
+    
+    This creates:
+    ```
+    myproject/
+    ├── pyproject.toml
+    ├── README.md
+    ├── src/
+    │   └── myproject/
+    │       └── __init__.py
+    └── .python-version
+    ```
+  </Step>
+  
+  <Step title="Configure pyproject.toml">
+    Key sections:
+    
+    ```toml
+    [project]
+    name = "myproject"
+    version = "0.1.0"
+    requires-python = ">=3.11"
+    dependencies = []
+    
+    [dependency-groups]
+    dev = [{include-group = "lint"}, {include-group = "test"}]
+    lint = ["ruff", "ty"]
+    test = ["pytest", "pytest-cov"]
+    
+    [tool.ruff]
+    line-length = 100
+    target-version = "py311"
+    
+    [tool.ruff.lint]
+    select = ["ALL"]
+    ignore = ["D", "COM812", "ISC001"]
+    
+    [tool.pytest.ini_options]
+    addopts = ["--cov=myproject", "--cov-fail-under=80"]
+    
+    [tool.ty.terminal]
+    error-on-warning = true
+    
+    [tool.ty.environment]
+    python-version = "3.11"
+    ```
+  </Step>
+  
+  <Step title="Install Dependencies">
+    ```bash
+    # Install all dependency groups
+    uv sync --all-groups
+    
+    # Or install specific groups
+    uv sync --group dev
+    ```
+  </Step>
+</Steps>
+
+## PEP 723: Standalone Scripts
+
+For single-file scripts with dependencies, use **PEP 723 inline metadata**:
+
+```python
+#!/usr/bin/env -S uv run
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "requests>=2.28",
+#   "rich>=13.0",
+# ]
+# ///
+
+import requests
+from rich import print
+
+response = requests.get("https://httpbin.org/ip")
+print(response.json())
+```
+
+Run with:
+```bash
+# uv automatically installs dependencies in isolated environment
+uv run script.py
+
+# Or make executable
+chmod +x script.py
+./script.py
+```
+
+<Accordion title="Why PEP 723 instead of requirements.txt?">
+- **Self-contained** - Dependencies declared in the script itself
+- **Isolated** - Each script gets its own environment
+- **Fast** - uv caches dependencies across runs
+- **Portable** - Works on any machine with uv installed
+</Accordion>
+
+## uv Command Reference
+
+### Project Management
+
+```bash
+# Create new project
+uv init myproject
+
+# Create distributable package
+uv init --package myproject
+
+# Add dependency
+uv add requests
+
+# Add to dependency group
+uv add --group dev pytest
+
+# Remove dependency
+uv remove requests
+
+# Install dependencies
+uv sync
+
+# Install all dependency groups
+uv sync --all-groups
+```
+
+### Running Code
+
+```bash
+# Run command in venv
+uv run python script.py
+
+# Run with temporary dependency
+uv run --with requests python -c "import requests; print(requests.get('https://httpbin.org/ip').json())"
+
+# Run module
+uv run python -m pytest
+```
+
+### Tool Management
+
+```bash
+# Install global tool
+uv tool install ruff
+
+# Run tool once (uvx)
+uvx ruff check .
+
+# Upgrade tool
+uv tool upgrade ruff
+
+# Upgrade all tools
+uv tool upgrade --all
+```
+
+### When to Use `--with` vs `uv add`
+
+<CardGroup cols={2}>
+  <Card title="uv add" icon="plus">
+    Package is a **project dependency** (goes in pyproject.toml/uv.lock)
+    
+    ```bash
+    uv add requests
+    ```
+  </Card>
+  
+  <Card title="--with" icon="clock">
+    **One-off usage**, testing, or scripts outside project context
+    
+    ```bash
+    uv run --with httpx pytest
+    ```
+  </Card>
+</CardGroup>
+
+## Migration Guide
+
+### From requirements.txt + pip
+
+<Steps>
+  <Step title="Determine Script vs Project">
+    **For standalone scripts:** Convert to PEP 723 inline metadata
+    
+    **For projects:** Continue to next step
+  </Step>
+  
+  <Step title="Initialize uv">
+    ```bash
+    uv init --bare
+    ```
+  </Step>
+  
+  <Step title="Add Dependencies">
+    ```bash
+    # Add each package (don't edit pyproject.toml manually)
+    uv add requests rich
+    
+    # Or import from requirements.txt
+    grep -v '^#' requirements.txt | grep -v '^-' | grep -v '^\s*$' | while read -r pkg; do
+        uv add "$pkg" || echo "Failed to add: $pkg"
+    done
+    
+    uv sync
+    ```
+  </Step>
+  
+  <Step title="Cleanup">
+    ```bash
+    # Delete old files
+    rm requirements.txt requirements-dev.txt
+    rm -rf venv/ .venv/
+    
+    # Add uv.lock to version control
+    git add uv.lock
+    ```
+  </Step>
+</Steps>
+
+### From flake8 + black + isort
+
+```bash
+# Remove old tools
+uv remove flake8 black isort
+
+# Delete old configs
+rm .flake8
+# Delete [tool.black] and [tool.isort] from pyproject.toml
+
+# Add ruff
+uv add --group dev ruff
+
+# Run formatting and linting
+uv run ruff format .
+uv run ruff check --fix .
+```
+
+### From mypy / pyright
+
+```bash
+# Remove old tools
+uv remove mypy pyright
+
+# Delete old configs
+rm mypy.ini pyrightconfig.json
+# Delete [tool.mypy] and [tool.pyright] from pyproject.toml
+
+# Add ty
+uv add --group dev ty
+
+# Run type checking
+uv run ty check src/
+```
+
+## Anti-Patterns to Avoid
+
+<Warning>
+**Don't use `uv pip install`**
+
+Use `uv add` and `uv sync` instead. `uv pip` is a compatibility shim.
+</Warning>
+
+<Warning>
+**Don't manually edit pyproject.toml to add dependencies**
+
+Use `uv add <pkg>` and `uv remove <pkg>`. This keeps pyproject.toml and uv.lock in sync.
+</Warning>
+
+<Warning>
+**Don't manually activate virtual environments**
+
+Use `uv run <cmd>` for all commands. uv manages the virtualenv automatically.
+</Warning>
+
+<Warning>
+**Don't use `[project.optional-dependencies]` for dev tools**
+
+Use `[dependency-groups]` (PEP 735) instead. This is the modern standard.
+</Warning>
+
+## Best Practices Checklist
+
+<Checklist>
+  - [ ] Use `src/` layout for packages
+  - [ ] Set `requires-python = ">=3.11"`
+  - [ ] Configure ruff with `select = ["ALL"]` and explicit ignores
+  - [ ] Use ty for type checking
+  - [ ] Enforce test coverage minimum (80%+)
+  - [ ] Use dependency groups instead of extras for dev tools
+  - [ ] Add `uv.lock` to version control
+  - [ ] Use PEP 723 for standalone scripts
+  - [ ] Always use `uv add`/`uv remove` (never edit pyproject.toml manually)
+  - [ ] Use `uv run` (never manually activate virtualenv)
+</Checklist>
+
+## Makefile Template
+
+```makefile
+.PHONY: dev lint format test build
+
+dev:
+	uv sync --all-groups
+
+lint:
+	uv run ruff format --check && uv run ruff check && uv run ty check src/
+
+format:
+	uv run ruff format .
+
+test:
+	uv run pytest
+
+build:
+	uv build
+```
+
+## Reference Documentation
+
+The skill includes detailed reference files:
+
+- **migration-checklist.md** - Step-by-step migration cleanup
+- **pyproject.md** - Complete pyproject.toml reference
+- **uv-commands.md** - uv command reference
+- **ruff-config.md** - Ruff linting/formatting configuration
+- **testing.md** - pytest and coverage setup
+- **pep723-scripts.md** - PEP 723 inline script metadata
+- **prek.md** - Fast pre-commit hooks with prek
+- **security-setup.md** - Security hooks and dependency scanning
+- **dependabot.md** - Automated dependency updates
+
+## Related Skills
+
+- **Devcontainer Setup** - Configures Python 3.13 via uv in devcontainers
+- **Ask Questions If Underspecified** - Used when migration preferences are unclear
+- **Second Opinion** - Can review Python code before committing

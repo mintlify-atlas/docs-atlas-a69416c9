@@ -1,0 +1,258 @@
+---
+title: Agentic Actions Auditor
+description: Audit GitHub Actions workflows for security vulnerabilities in AI agent integrations
+---
+
+Audits GitHub Actions workflows for security vulnerabilities in AI agent integrations. Detects misconfigurations and attack vectors specific to Claude Code Action, Gemini CLI, OpenAI Codex, and GitHub AI Inference when used in CI/CD pipelines.
+
+## Overview
+
+This plugin provides static security analysis for GitHub Actions workflows that invoke AI coding agents. It identifies attack vectors where attacker-controlled input (pull request titles, branch names, issue bodies, comments, commit messages) can reach an AI agent running with elevated permissions in CI.
+
+<Info>
+**Author:** Emilio López & Will Vandevanter  
+**Version:** 1.2.0
+</Info>
+
+## Attack Vectors Detected
+
+The plugin checks for nine categories of security issues:
+
+<CardGroup cols={2}>
+  <Card title="Env Var Intermediary" icon="code">
+    Attacker data flows through `env:` blocks to AI prompt fields with no visible `${{ }}` expressions
+  </Card>
+  <Card title="Direct Expression Injection" icon="brackets-curly">
+    `${{ github.event.* }}` expressions embedded directly in AI prompt fields
+  </Card>
+  <Card title="CLI Data Fetch" icon="terminal">
+    `gh` CLI commands in prompts fetch attacker-controlled content at runtime
+  </Card>
+  <Card title="PR Target + Checkout" icon="code-branch">
+    `pull_request_target` trigger combined with checkout of PR head code
+  </Card>
+  <Card title="Error Log Injection" icon="bug">
+    CI error output or build logs fed to AI prompts carry attacker payloads
+  </Card>
+  <Card title="Subshell Expansion" icon="dollar-sign">
+    Restricted tools like `echo` allow subshell expansion (`echo $(env)`) bypass
+  </Card>
+  <Card title="Eval of AI Output" icon="skull-crossbones">
+    AI response flows to `eval`, `exec`, or unquoted `$()` in subsequent steps
+  </Card>
+  <Card title="Dangerous Sandbox Configs" icon="shield-xmark">
+    `danger-full-access`, `Bash(*)`, `--yolo` disable safety protections
+  </Card>
+  <Card title="Wildcard Allowlists" icon="asterisk">
+    `allowed_non_write_users: "*"` or `allow-users: "*"` permit any user to trigger
+  </Card>
+</CardGroup>
+
+## Supported AI Actions
+
+| Action | Repository | Status |
+|--------|------------|--------|
+| Claude Code Action | `anthropics/claude-code-action` | Supported |
+| Gemini CLI | `google-github-actions/run-gemini-cli` | Primary |
+| Gemini CLI (legacy) | `google-gemini/gemini-cli-action` | Archived |
+| OpenAI Codex | `openai/codex-action` | Supported |
+| GitHub AI Inference | `actions/ai-inference` | Supported |
+
+## Installation
+
+From a project with the Trail of Bits internal marketplace configured:
+
+```bash
+/plugin menu
+```
+
+Select **agentic-actions-auditor** from the Security Tooling section.
+
+## Usage
+
+### Local Repository Analysis
+
+The skill activates automatically when Claude detects GitHub Actions workflow files containing AI agent action references:
+
+```
+Audit the GitHub Actions workflows in this repository for AI agent security issues.
+```
+
+### Remote Repository Analysis
+
+Analyze remote repositories by providing a GitHub URL or `owner/repo` identifier:
+
+```
+Audit github.com/example/repo for agentic action vulnerabilities
+```
+
+```
+Review anthropics/claude-code-action@main workflows for security issues
+```
+
+<Note>
+Remote analysis requires GitHub authentication. Run `gh auth login` if you encounter auth errors.
+</Note>
+
+## Example Vulnerability: Env Var Intermediary
+
+This is the most commonly missed attack vector because it contains no visible `${{ }}` expressions in the prompt.
+
+```yaml
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/run-gemini-cli@v0
+        env:
+          ISSUE_TITLE: '${{ github.event.issue.title }}'   # Attacker-controlled
+          ISSUE_BODY: '${{ github.event.issue.body }}'      # Attacker-controlled
+        with:
+          prompt: |
+            Review the issue title and body provided in the environment
+            variables: "${ISSUE_TITLE}" and "${ISSUE_BODY}".
+            # No ${{ }} here -- but attacker data still reaches the AI
+```
+
+**Data flow:**
+1. `github.event.issue.body` → `env: ISSUE_BODY` (evaluated before step runs)
+2. Prompt instruction references `"${ISSUE_BODY}"`
+3. Gemini reads env var at runtime
+4. Attacker content reaches AI context
+
+<Warning>
+The `${{ }}` expression is in the `env:` block, not the prompt. By the time the step executes, the env var contains raw attacker text. The AI agent reads it as a normal environment variable.
+</Warning>
+
+## Example Vulnerability: Direct Expression Injection
+
+```yaml
+on:
+  pull_request_target:
+    types: [opened]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: anthropics/claude-code-action@v1
+        with:
+          prompt: |
+            Review this pull request: ${{ github.event.pull_request.title }}
+            
+            Description: ${{ github.event.pull_request.body }}
+```
+
+**Attack scenario:**
+- Attacker opens a PR with title: `"; rm -rf / #`
+- The malicious content flows directly into the AI prompt
+- Claude executes with tainted prompt, potentially running attacker commands
+
+## Example Vulnerability: Dangerous Sandbox Config
+
+```yaml
+- uses: openai/codex-action@v1
+  with:
+    prompt: "Fix the failing tests"
+    sandbox: danger-full-access  # Disables all safety protections
+    safety-strategy: unsafe       # Removes safety guardrails
+```
+
+**Impact:**
+- No filesystem restrictions
+- No command filtering
+- Full system access for AI-generated code
+- Combined with any injection vector = critical severity
+
+## Audit Methodology
+
+The plugin follows a systematic 5-step process:
+
+<Steps>
+  <Step title="Discover Workflow Files">
+    Scan `.github/workflows/*.yml` and `.github/workflows/*.yaml` for workflow definitions
+  </Step>
+  <Step title="Identify AI Action Steps">
+    Match `uses:` fields against known AI action references, following cross-file composite actions and reusable workflows
+  </Step>
+  <Step title="Capture Security Context">
+    Extract trigger events, env blocks, permissions, sandbox configs, and user allowlists
+  </Step>
+  <Step title="Analyze Attack Vectors">
+    Check all nine attack vectors against captured security context with detailed data flow analysis
+  </Step>
+  <Step title="Report Findings">
+    Generate structured findings with severity ratings, data flow traces, and remediation guidance
+  </Step>
+</Steps>
+
+## Report Format
+
+Findings include:
+
+- **Severity:** High / Medium / Low / Info based on trigger exposure, sandbox config, permissions, and data flow directness
+- **File:** Workflow path with clickable GitHub links for remote analysis
+- **Step:** Job and step reference with line numbers
+- **Impact:** What an attacker can achieve
+- **Evidence:** YAML code snippets showing the vulnerable pattern
+- **Data Flow:** Numbered trace from attacker action to AI agent
+- **Remediation:** Action-specific secure configuration guidance
+
+## Target Audience
+
+<CardGroup cols={3}>
+  <Card title="Security Auditors" icon="magnifying-glass">
+    Reviewing repositories that use AI agents in CI/CD
+  </Card>
+  <Card title="Developers" icon="code">
+    Configuring AI actions securely in workflows
+  </Card>
+  <Card title="DevSecOps Engineers" icon="shield">
+    Establishing secure defaults for AI-assisted pipelines
+  </Card>
+</CardGroup>
+
+## Common Rationalizations to Reject
+
+<Warning>
+When auditing agentic actions, reject these reasoning shortcuts that lead to missed findings:
+</Warning>
+
+| Rationalization | Why It's Wrong |
+|-----------------|----------------|
+| "It only runs on PRs from maintainers" | Ignores `pull_request_target` and `issue_comment` triggers that expose actions to external input without write access |
+| "We use allowed_tools to restrict what it can do" | Tool restrictions can still be weaponized. Even `echo` can exfiltrate via `echo $(env)`. Limited tools ≠ safe tools |
+| "There's no `${{ }}` in the prompt, so it's safe" | Classic env var intermediary miss. Data flows through `env:` blocks with zero visible expressions |
+| "The sandbox prevents any real damage" | Sandbox misconfigurations disable protections entirely. Even proper sandboxes leak secrets via env vars |
+
+## Clean Repository Output
+
+When no findings are detected, the plugin produces a substantive report:
+
+```
+Analyzed 3 workflows containing 2 AI action instances. Found 0 findings.
+
+Workflows Scanned:
+- .github/workflows/review.yml (1 AI action instance)
+- .github/workflows/triage.yml (1 AI action instance)
+- .github/workflows/build.yml (0 AI action instances)
+
+AI Actions Found:
+- Claude Code Action: 1
+- Gemini CLI: 1
+
+No security findings identified.
+```
+
+## Related Skills
+
+- **differential-review** - Security-focused PR review can identify vulnerable workflow changes
+- **fp-check** - Verify suspected vulnerabilities discovered by this auditor
+
+## License
+
+Creative Commons Attribution-ShareAlike 4.0 International

@@ -1,0 +1,425 @@
+---
+title: Constant-Time Analysis
+description: Detect timing side-channel vulnerabilities in cryptographic code across 12 languages
+icon: timer
+---
+
+Analyze cryptographic implementations to detect operations that leak secret data through execution timing variations. Helps prevent timing attacks like KyberSlash by identifying variable-time operations in compiled assembly and bytecode.
+
+## Overview
+
+The Constant-Time Analysis plugin detects timing side-channel vulnerabilities by analyzing compiler output and runtime bytecode for dangerous operations:
+
+- **Division on secrets** - Hardware division timing varies based on operand values
+- **Secret-dependent branches** - Different execution paths have different timing
+- **Floating-point operations** - Variable latency based on inputs
+- **Non-constant comparisons** - Early-exit string/memory comparison
+
+<Info>
+This tool performs **static analysis only** - it flags potentially dangerous operations but requires manual verification to confirm whether they process secret data.
+</Info>
+
+## Supported Languages
+
+### Native Compiled Languages
+
+Analyzes assembly output from compilers:
+
+- **C/C++** - GCC, Clang
+- **Go** - Go compiler
+- **Rust** - Rustc
+- **Swift** - swiftc (iOS/macOS)
+
+### VM-Compiled Languages
+
+Analyzes bytecode (JVM/CIL):
+
+- **Java** - JVM bytecode via `javap`
+- **Kotlin** - JVM bytecode via `kotlinc`
+- **C#** - CIL bytecode via `ilspycmd`
+
+### Interpreted/Scripting Languages
+
+Analyzes VM bytecode or opcodes:
+
+- **PHP** - VLD extension or opcache
+- **JavaScript/TypeScript** - V8 bytecode
+- **Python** - CPython bytecode via `dis`
+- **Ruby** - YARV bytecode
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Multi-Architecture" icon="microchip">
+    Supports x86_64, ARM64, ARM, RISC-V, PowerPC, s390x, i386 for cross-platform analysis
+  </Card>
+  <Card title="Optimization Testing" icon="gauge-high">
+    Test across O0-O3, Os, Oz to catch optimization-induced vulnerabilities
+  </Card>
+  <Card title="CI Integration" icon="gears">
+    GitHub Actions annotations and JSON output for automated security checks
+  </Card>
+  <Card title="Real-World Coverage" icon="shield-check">
+    Detects vulnerability classes from KyberSlash, Lucky Thirteen, and RSA timing attacks
+  </Card>
+</CardGroup>
+
+## Installation
+
+```bash
+ct-analyzer --version
+```
+
+If not installed:
+
+```bash
+uv pip install -e .
+```
+
+## Usage
+
+### Basic Analysis
+
+<CodeGroup>
+```bash C/C++
+ct-analyzer crypto.c
+```
+
+```bash Rust
+ct-analyzer crypto.rs
+```
+
+```bash Python
+ct-analyzer crypto.py
+```
+
+```bash JavaScript
+ct-analyzer crypto.js
+```
+</CodeGroup>
+
+### Advanced Options
+
+<ParamField path="--arch" type="string" default="native">
+  Target architecture: x86_64, arm64, arm, riscv64, ppc64le, s390x, i386
+</ParamField>
+
+<ParamField path="--opt-level" type="string" default="O2">
+  Optimization level: O0, O1, O2, O3, Os, Oz
+</ParamField>
+
+<ParamField path="--warnings" type="boolean">
+  Include conditional branch warnings
+</ParamField>
+
+<ParamField path="--func" type="regex">
+  Filter to specific functions by pattern
+</ParamField>
+
+<ParamField path="--json" type="boolean">
+  Output JSON format for CI integration
+</ParamField>
+
+### Cross-Architecture Testing
+
+```bash
+# Test for ARM64 deployment
+ct-analyzer --arch arm64 crypto.c
+
+# Test multiple optimization levels
+ct-analyzer --opt-level O0 crypto.c
+ct-analyzer --opt-level O3 crypto.c
+```
+
+### CI Integration
+
+```yaml GitHub Actions
+name: Constant-Time Check
+
+on: [push, pull_request]
+
+jobs:
+  ct-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install ct-analyzer
+        run: uv pip install -e .
+      
+      - name: Check constant-time properties
+        run: ct-analyzer --github src/crypto/*.c
+```
+
+## /ct-check Command
+
+The plugin provides a slash command for quick analysis:
+
+```
+/ct-check <source-file> [--warnings] [--json] [--arch <arch>]
+```
+
+**Example:**
+```
+/ct-check src/sign.c --warnings --arch arm64
+```
+
+This invokes the `constant-time-analysis` skill with full workflow execution.
+
+## Detected Vulnerabilities
+
+### Error-Level (Must Fix)
+
+<Tabs>
+  <Tab title="x86_64">
+    **Integer Division:** `DIV`, `IDIV`, `DIVQ`, `IDIVQ`
+    
+    **FP Division:** `DIVSS`, `DIVSD`, `DIVPS`, `DIVPD`
+    
+    **Square Root:** `SQRTSS`, `SQRTSD`, `SQRTPS`, `SQRTPD`
+  </Tab>
+  
+  <Tab title="ARM64">
+    **Integer Division:** `UDIV`, `SDIV`
+    
+    **FP Division:** `FDIV`
+    
+    **Square Root:** `FSQRT`
+  </Tab>
+  
+  <Tab title="RISC-V">
+    **Integer Division:** `DIV`, `DIVU`, `REM`, `REMU`
+    
+    **FP Division:** `FDIV.S`, `FDIV.D`
+    
+    **Square Root:** `FSQRT.S`, `FSQRT.D`
+  </Tab>
+</Tabs>
+
+### Warning-Level (Review Needed)
+
+Conditional branches that may leak timing if condition depends on secret data:
+
+- **x86:** `JE`, `JNE`, `JZ`, `JNZ`, `JA`, `JB`, `JG`, `JL`
+- **ARM:** `BEQ`, `BNE`, `CBZ`, `CBNZ`, `TBZ`, `TBNZ`
+- **RISC-V:** `BEQ`, `BNE`, `BLT`, `BGE`
+
+## Interpreting Results
+
+### Example Output
+
+```text
+============================================================
+Constant-Time Analysis Report
+============================================================
+Source: decompose.c
+Architecture: arm64
+Compiler: clang
+Optimization: O2
+Functions analyzed: 4
+Instructions analyzed: 88
+
+VIOLATIONS FOUND:
+----------------------------------------
+[ERROR] SDIV
+  Function: decompose_vulnerable
+  Reason: SDIV has early termination optimization; execution time depends on operand values
+
+[ERROR] SDIV
+  Function: use_hint_vulnerable
+  Reason: SDIV has early termination optimization; execution time depends on operand values
+
+----------------------------------------
+Result: FAILED
+Errors: 2, Warnings: 0
+```
+
+### Verifying Results (Critical)
+
+<Warning>
+Not every flagged operation is a vulnerability. The tool has **no data flow analysis** - it flags ALL potentially dangerous operations regardless of whether they involve secrets.
+</Warning>
+
+For each flagged violation:
+
+1. **Identify secret inputs** - Private keys, plaintext, signatures, tokens
+2. **Trace data flow** - Does the flagged instruction process secret-derived values?
+3. **Apply triage questions:**
+
+<AccordionGroup>
+  <Accordion title="Is the operand a compile-time constant?">
+    **Likely false positive** - Constants don't leak timing information
+    
+    ```c
+    // FALSE POSITIVE
+    int blocks = TOTAL_SIZE / 16;  // Division by constant
+    ```
+  </Accordion>
+  
+  <Accordion title="Is the operand a public parameter?">
+    **Likely false positive** - Length/count parameters are usually safe
+    
+    ```c
+    // FALSE POSITIVE
+    int num_blocks = data_len / BLOCK_SIZE;  // Length, not content
+    ```
+  </Accordion>
+  
+  <Accordion title="Is the operand derived from secrets?">
+    **TRUE POSITIVE** - Secret-dependent operations leak timing
+    
+    ```c
+    // TRUE POSITIVE
+    int32_t q = secret_coef / GAMMA2;  // secret_coef from private key
+    ```
+  </Accordion>
+  
+  <Accordion title="Can an attacker influence the operand?">
+    **TRUE POSITIVE** - Attacker-controlled values enable timing attacks
+    
+    ```c
+    // TRUE POSITIVE
+    int result = user_input / divisor;  // Timing varies with user_input
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Fixing Vulnerabilities
+
+### Replace Division with Barrett Reduction
+
+<CodeGroup>
+```c Vulnerable
+int32_t q = a / divisor;  // Variable-time division
+```
+
+```c Safe
+// Precompute: mu = ceil(2^32 / divisor)
+uint32_t q = (uint32_t)(((uint64_t)a * mu) >> 32);
+```
+</CodeGroup>
+
+### Replace Branches with Constant-Time Selection
+
+<CodeGroup>
+```c Vulnerable
+if (secret) {
+    result = a;
+} else {
+    result = b;
+}
+```
+
+```c Safe
+uint32_t mask = -(uint32_t)(secret != 0);
+result = (a & mask) | (b & ~mask);
+```
+</CodeGroup>
+
+### Replace Comparisons
+
+<CodeGroup>
+```c Vulnerable
+if (memcmp(a, b, len) == 0) {
+    // Early-exit comparison leaks timing
+}
+```
+
+```c Safe
+// Use crypto/subtle or equivalent
+if (crypto_verify_32(a, b) == 0) {
+    // Constant-time comparison
+}
+```
+</CodeGroup>
+
+## Language-Specific Detection
+
+### PHP Analysis
+
+**Detected patterns:**
+- Division: `ZEND_DIV`, `ZEND_MOD` → Use Barrett reduction
+- String comparison: `strcmp()`, `===` on secrets → Use `hash_equals()`
+- Weak RNG: `rand()`, `mt_rand()` → Use `random_int()`/`random_bytes()`
+- Cache timing: `chr()`, `ord()` → Use `pack()`/`unpack()`
+
+**Installation:**
+```bash
+pecl install vld  # Recommended
+# Or use built-in opcache
+```
+
+### JavaScript/TypeScript Analysis
+
+**Detected patterns:**
+- Division: `Div`, `Mod` bytecodes → Use constant-time multiply-shift
+- String comparison: `===` on secrets → Use `crypto.timingSafeEqual()`
+- Weak RNG: `Math.random()` → Use `crypto.getRandomValues()`
+- Variable latency: `Math.sqrt()`, `Math.pow()` → Avoid in crypto paths
+
+**Requirements:**
+```bash
+node --version  # Node.js required
+npm install -g typescript  # For .ts files
+```
+
+### Python Analysis
+
+**Detected patterns:**
+- Division: `BINARY_OP 11 (/)`, `BINARY_OP 6 (%)` → Use Barrett reduction
+- String comparison: `==` on secrets → Use `hmac.compare_digest()`
+- Weak RNG: `random.random()` → Use `secrets.token_bytes()`
+- Variable latency: `math.sqrt()`, `math.pow()` → Avoid in crypto paths
+
+### Ruby Analysis
+
+**Detected patterns:**
+- Division: `opt_div`, `opt_mod` → Use constant-time alternatives
+- String comparison: `==` on secrets → Use `Rack::Utils.secure_compare()`
+- Weak RNG: `rand()` → Use `SecureRandom.random_bytes()`
+- Variable latency: `Math.sqrt()` → Avoid in crypto paths
+
+## Limitations
+
+<Warning>
+**Important limitations to understand:**
+
+1. **Static Analysis Only** - Analyzes compiler output, not runtime behavior. Cannot detect:
+   - Cache timing attacks from memory access patterns
+   - Microarchitectural side-channels (Spectre, Meltdown)
+   - Processor-specific optimizations
+
+2. **No Data Flow Analysis** - Flags ALL dangerous instructions regardless of whether they operate on secrets. **Manual review required** to eliminate false positives.
+
+3. **Compiler Variations** - Different compilers/versions may produce different assembly. Test with multiple optimization levels and target production architectures.
+</Warning>
+
+## Real-World Impact
+
+- **KyberSlash (2023)** - Division instructions in ML-KEM allowed key recovery
+- **Lucky Thirteen (2013)** - CBC padding timing enabled plaintext recovery  
+- **RSA Timing Attacks** - Division timing leaked private key bits
+
+## Related Plugins
+
+- [Property-Based Testing](/plugins/property-based-testing) - Test crypto invariants
+- [Zeroize Audit](/plugins/zeroize-audit) - Verify secret cleanup
+- [Testing Handbook Skills](/plugins/testing-handbook-skills) - Security testing techniques
+
+## References
+
+- [Cryptocoding Guidelines](https://github.com/veorq/cryptocoding)
+- [KyberSlash Attack](https://kyberslash.cr.yp.to/)
+- [BearSSL Constant-Time](https://www.bearssl.org/constanttime.html)
+- [NIST FIPS 204: ML-DSA](https://csrc.nist.gov/pubs/fips/204/final)
+
+<Note>
+**Author:** Scott Arciszewski (Trail of Bits)
+
+**Version:** 0.1.0
+</Note>

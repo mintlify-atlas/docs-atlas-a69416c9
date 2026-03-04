@@ -1,0 +1,354 @@
+---
+title: Static Analysis
+description: Comprehensive static analysis toolkit with CodeQL, Semgrep, and SARIF parsing for security vulnerability detection
+---
+
+The Static Analysis plugin provides a complete toolkit for security vulnerability detection using industry-leading static analysis tools.
+
+<Info>
+**Based on Trail of Bits Testing Handbook**
+
+Skills are based on the [CodeQL Testing Handbook](https://appsec.guide/docs/static-analysis/codeql/) and [Semgrep Testing Handbook](https://appsec.guide/docs/static-analysis/semgrep/).
+
+**Author:** Axel Mierczuk & Paweł Płatek
+</Info>
+
+## Installation
+
+```bash
+/plugin install trailofbits/skills/plugins/static-analysis
+```
+
+## Skills Included
+
+<CardGroup cols={3}>
+  <Card title="CodeQL" icon="magnifying-glass-chart">
+    Deep security analysis with taint tracking and data flow
+  </Card>
+  <Card title="Semgrep" icon="bolt">
+    Fast pattern-based security scanning
+  </Card>
+  <Card title="SARIF Parsing" icon="file-code">
+    Parse and process results from static analysis tools
+  </Card>
+</CardGroup>
+
+## CodeQL Skill
+
+Interprocedural security analysis with taint tracking and data flow for Python, JavaScript, Go, Java, C/C++, C#, Ruby, and Swift.
+
+### Key Features
+
+<AccordionGroup>
+  <Accordion title="Database Creation">
+    - Create databases for Python, JavaScript, Go, Java, C/C++, and more
+    - Automatic build method selection with fallbacks
+    - Quality assessment and validation
+    - macOS Apple Silicon workarounds
+  </Accordion>
+
+  <Accordion title="Security Queries">
+    - SARIF/CSV output formats
+    - Multiple query pack support (security-extended, Trail of Bits, Community)
+    - Two scan modes: "run all" and "important only"
+    - Interprocedural taint tracking
+  </Accordion>
+
+  <Accordion title="Data Extension Models">
+    - Generate project-specific source/sink models
+    - Detect custom API patterns
+    - Extend CodeQL's built-in library knowledge
+    - YAML-based model definitions
+  </Accordion>
+</AccordionGroup>
+
+### Essential Principles
+
+<Warning>
+**Critical CodeQL Principles**
+
+1. **Database quality is non-negotiable** - A database that builds is not automatically good. Always run quality assessment.
+2. **Data extensions catch what CodeQL misses** - Even projects using standard frameworks have custom wrappers.
+3. **Explicit suite references prevent silent query dropping** - Never pass pack names directly to `codeql database analyze`.
+4. **Zero findings needs investigation** - Zero results can indicate poor database quality or missing models.
+5. **macOS Apple Silicon requires workarounds** - Exit code 137 is arm64e/arm64 mismatch, not a build failure.
+</Warning>
+
+### CodeQL Workflow
+
+The skill provides three workflows:
+
+| Workflow | Purpose |
+|----------|---------|
+| **Build Database** | Create CodeQL database using build methods in sequence |
+| **Create Data Extensions** | Detect or generate data extension models for project APIs |
+| **Run Analysis** | Select rulesets, execute queries, process results |
+
+### Output Structure
+
+All generated files are stored in a single output directory:
+
+```
+static_analysis_codeql_1/
+├── rulesets.txt                 # Selected query packs
+├── codeql.db/                   # CodeQL database
+├── build.log                    # Build log
+├── diagnostics/                 # Diagnostic queries and CSVs
+├── extensions/                  # Data extension YAMLs
+├── raw/                         # Unfiltered analysis output
+│   ├── results.sarif
+│   └── important-only.qls
+└── results/                     # Final filtered results
+    └── results.sarif
+```
+
+### Supported Languages
+
+<CardGroup cols={3}>
+  <Card title="Python" icon="python">
+    Django, Flask, FastAPI support
+  </Card>
+  <Card title="JavaScript/TypeScript" icon="js">
+    Node.js, React, Vue
+  </Card>
+  <Card title="Go" icon="golang">
+    Standard library coverage
+  </Card>
+  <Card title="Java/Kotlin" icon="java">
+    Spring, Android
+  </Card>
+  <Card title="C/C++" icon="c">
+    Build tracing required
+  </Card>
+  <Card title="C#" icon="microsoft">
+    .NET, ASP.NET
+  </Card>
+  <Card title="Ruby" icon="gem">
+    Rails support
+  </Card>
+  <Card title="Swift" icon="apple">
+    iOS/macOS
+  </Card>
+</CardGroup>
+
+## Semgrep Skill
+
+Fast pattern-based security scanning with parallel execution and automatic language detection.
+
+### Key Features
+
+<AccordionGroup>
+  <Accordion title="Parallel Execution">
+    - Spawns parallel scanner subagents for each language
+    - Automatic language detection from file extensions
+    - Merged SARIF output
+    - Support for GitHub repositories (auto-clones)
+  </Accordion>
+
+  <Accordion title="Scan Modes">
+    **Run All**: Complete coverage, all severity levels
+
+    **Important Only**: High-confidence security vulnerabilities only
+    - Pre-filter: `--severity MEDIUM/HIGH/CRITICAL`
+    - Post-filter: `category=security`, `confidence∈{MEDIUM,HIGH}`
+  </Accordion>
+
+  <Accordion title="Rulesets">
+    - Official Semgrep registry (OWASP, CWE)
+    - Trail of Bits custom rules
+    - Third-party rules (0xdea, Decurity)
+    - Custom YAML rules with pattern matching
+    - Taint mode for data flow tracking
+  </Accordion>
+
+  <Accordion title="Semgrep Pro Support">
+    - Automatic detection of Pro license
+    - Cross-file taint tracking
+    - Interprocedural analysis
+    - Additional languages (Apex, C#, Elixir)
+  </Accordion>
+</AccordionGroup>
+
+### Essential Principles
+
+<Warning>
+**Critical Semgrep Principles**
+
+1. **Always use `--metrics=off`** - Semgrep sends telemetry by default; prevent data leakage during audits.
+2. **User must approve the scan plan** - Step 3 is a hard gate; present exact rulesets before scanning.
+3. **Third-party rulesets are required** - Trail of Bits, 0xdea, and Decurity rules catch vulnerabilities absent from official registry.
+4. **Spawn all scan Tasks in parallel** - Never spawn Tasks sequentially; emit all in one response.
+5. **Always check for Semgrep Pro** - Pro enables cross-file taint tracking and catches ~250% more true positives.
+</Warning>
+
+### Semgrep Workflow
+
+1. **Resolve output directory** - Auto-increment `static_analysis_semgrep_1`, `_2`, etc.
+2. **Detect languages and Pro availability** - Use Glob to find file types
+3. **Select scan mode and rulesets** - Present plan to user
+4. **Get explicit approval** - Hard gate, must approve before scanning
+5. **Spawn parallel scanner Tasks** - One Task per language category
+6. **Merge results and report** - Combine SARIF files, provide summary
+
+### Agents
+
+| Agent | Tools | Purpose |
+|-------|-------|---------|
+| `semgrep-scanner` | Bash | Executes parallel semgrep scans for a language category |
+| `semgrep-triager` | Read, Grep, Glob, Write | Classifies findings as true/false positives by reading source |
+
+### Output Structure
+
+```
+static_analysis_semgrep_1/
+├── rulesets.txt                 # Approved rulesets
+├── raw/                         # Per-scan raw output
+│   ├── python-python.json
+│   ├── python-python.sarif
+│   ├── python-django.sarif
+│   └── ...
+└── results/                     # Final merged output
+    └── results.sarif
+```
+
+## SARIF Parsing Skill
+
+Parse, analyze, and process SARIF files from static analysis tools.
+
+### Key Features
+
+<AccordionGroup>
+  <Accordion title="Quick Analysis with jq">
+    ```bash
+    # Count total findings
+    jq '[.runs[].results[]] | length' results.sarif
+
+    # Extract errors only
+    jq '.runs[].results[] | select(.level == "error")' results.sarif
+
+    # Get findings with locations
+    jq '.runs[].results[] | {
+      rule: .ruleId,
+      file: .locations[0].physicalLocation.artifactLocation.uri,
+      line: .locations[0].physicalLocation.region.startLine
+    }' results.sarif
+    ```
+  </Accordion>
+
+  <Accordion title="Python with pysarif">
+    ```python
+    from pysarif import load_from_file
+
+    sarif = load_from_file("results.sarif")
+    for run in sarif.runs:
+        for result in run.results:
+            print(f"[{result.level}] {result.rule_id}")
+    ```
+  </Accordion>
+
+  <Accordion title="Aggregation with sarif-tools">
+    ```bash
+    # Summary of findings
+    sarif summary results.sarif
+
+    # Diff two SARIF files
+    sarif diff baseline.sarif current.sarif
+
+    # Convert to CSV/HTML
+    sarif csv results.sarif > results.csv
+    sarif html results.sarif > report.html
+    ```
+  </Accordion>
+
+  <Accordion title="Deduplication & Fingerprinting">
+    - Stable fingerprints for tracking findings across runs
+    - Path normalization (handles different environments)
+    - Baseline comparison for regression detection
+    - Suppression of known false positives
+  </Accordion>
+</AccordionGroup>
+
+### SARIF Structure
+
+```
+sarifLog
+├── version: "2.1.0"
+└── runs[]
+    ├── tool.driver (name, version, rules)
+    ├── results[] (findings)
+    │   ├── ruleId
+    │   ├── level (error/warning/note)
+    │   ├── message.text
+    │   ├── locations[]
+    │   └── fingerprints
+    └── artifacts[] (scanned files)
+```
+
+### Tool Selection Guide
+
+| Use Case | Tool | Installation |
+|----------|------|--------------|
+| Quick CLI queries | jq | `brew install jq` |
+| Python scripting (simple) | pysarif | `pip install pysarif` |
+| Python scripting (advanced) | sarif-tools | `pip install sarif-tools` |
+| .NET applications | SARIF SDK | NuGet package |
+
+### Common Pitfalls
+
+<Warning>
+**Avoid These Issues**
+
+1. **Path normalization** - Different tools report paths differently (absolute, relative, URI-encoded)
+2. **Fingerprint mismatch** - Fingerprints may not match if file paths differ or code is reformatted
+3. **Missing data** - Many SARIF fields are optional; use defensive access
+4. **Large files** - For 100MB+ files, use streaming with `ijson`
+5. **Schema validation** - Validate before processing to catch malformed files
+</Warning>
+
+## When to Use Each Tool
+
+<CardGroup cols={2}>
+  <Card title="Use CodeQL When" icon="magnifying-glass-chart">
+    - Need deep interprocedural analysis
+    - Tracking data flow across files/functions
+    - Complex taint tracking required
+    - Building a database is feasible
+  </Card>
+  <Card title="Use Semgrep When" icon="bolt">
+    - Need fast feedback
+    - Pattern-based detection sufficient
+    - No build capability for compiled languages
+    - Quick first-pass security scan
+  </Card>
+</CardGroup>
+
+## Related Skills
+
+<CardGroup cols={2}>
+  <Card title="Variant Analysis" href="/plugins/variant-analysis" icon="code-compare">
+    Use CodeQL/Semgrep patterns to find bug variants
+  </Card>
+  <Card title="Supply Chain Risk Auditor" href="/plugins/supply-chain-risk-auditor" icon="link">
+    Audit dependencies for exploitation risk
+  </Card>
+</CardGroup>
+
+## Success Criteria
+
+### CodeQL Analysis Complete
+
+- [ ] Database built with quality assessment passed
+- [ ] Data extensions evaluated or created
+- [ ] Analysis run with explicit suite reference
+- [ ] All available query packs used
+- [ ] Results preserved in output directory
+- [ ] Zero findings investigated
+
+### Semgrep Scan Complete
+
+- [ ] Languages detected with Pro status checked
+- [ ] User approved scan plan
+- [ ] Third-party rulesets included
+- [ ] All Tasks spawned in parallel
+- [ ] `--metrics=off` used everywhere
+- [ ] Results merged and summarized

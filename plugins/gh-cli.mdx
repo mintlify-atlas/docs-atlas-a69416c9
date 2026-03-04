@@ -1,0 +1,317 @@
+---
+title: GitHub CLI (gh)
+description: Intercepts GitHub URL fetches and redirects to authenticated gh CLI
+icon: github
+---
+
+<Info>
+Automatically redirects Claude from WebFetch/curl to the authenticated `gh` CLI when accessing GitHub resources. Works with private repos and avoids rate limits.
+</Info>
+
+## Overview
+
+Claude Code's `WebFetch` tool and Bash `curl`/`wget` commands don't use GitHub authentication. This plugin solves that by:
+
+1. **Intercepting GitHub URL access** via PreToolUse hooks
+2. **Suggesting the correct `gh` CLI command** instead
+3. **Providing comprehensive `gh` CLI guidance** via a skill
+4. **Auto-cleaning cloned repositories** when sessions end
+
+**Author:** William Tan
+
+## Problems Solved
+
+<CardGroup cols={3}>
+  <Card title="Private Repos" icon="lock">
+    Unauthenticated fetches fail with 404 errors. `gh` uses your token automatically.
+  </Card>
+  
+  <Card title="Rate Limits" icon="gauge-high">
+    Unauthenticated: 60 req/hr. Authenticated: 5,000 req/hr.
+  </Card>
+  
+  <Card title="Incomplete Data" icon="circle-exclamation">
+    Some API responses require authentication to return full data.
+  </Card>
+</CardGroup>
+
+## What Gets Intercepted
+
+| Tool | Pattern | Suggestion |
+|------|---------|------------|
+| `WebFetch` | `github.com/{owner}/{repo}` | `gh repo view owner/repo` |
+| `WebFetch` | `github.com/.../blob/...` | `gh repo clone` + Read |
+| `WebFetch` | `github.com/.../tree/...` | `gh repo clone` + Read/Glob/Grep |
+| `WebFetch` | `github.com/.../pulls` | `gh pr list` / `gh pr view` |
+| `WebFetch` | `github.com/.../issues` | `gh issue list` / `gh issue view` |
+| `WebFetch` | `api.github.com/...` | `gh api <endpoint>` |
+| `WebFetch` | `raw.githubusercontent.com/...` | `gh repo clone` + Read |
+| `Bash` | `curl https://api.github.com/...` | `gh api <endpoint>` |
+| `Bash` | `curl https://raw.githubusercontent.com/...` | `gh repo clone` + Read |
+| `Bash` | `wget https://github.com/...` | `gh release download` |
+
+## What Passes Through
+
+<Check>
+- Non-GitHub URLs (any domain that isn't `github.com`, `api.github.com`, `raw.githubusercontent.com`, or `gist.github.com`)
+- GitHub Pages sites (`*.github.io`)
+- Commands already using `gh`
+- Git commands (`git clone`, `git push`, etc.)
+- Search commands that mention GitHub URLs (`grep`, `rg`, etc.)
+</Check>
+
+## Installation
+
+<Steps>
+  <Step title="Install GitHub CLI">
+    If not already installed:
+    
+    <CodeGroup>
+    ```bash macOS
+    brew install gh
+    ```
+    
+    ```bash Ubuntu/Debian
+    sudo apt install gh
+    ```
+    
+    ```bash Windows
+    winget install GitHub.cli
+    ```
+    </CodeGroup>
+  </Step>
+  
+  <Step title="Authenticate">
+    ```bash
+    gh auth login
+    ```
+    
+    Follow the prompts to authenticate with your GitHub account.
+  </Step>
+  
+  <Step title="Install Plugin">
+    ```bash
+    /plugin marketplace add trailofbits/skills
+    /plugin install gh-cli
+    ```
+  </Step>
+</Steps>
+
+<Note>
+If `gh` is not installed, the hooks silently pass through (no disruption to your workflow).
+</Note>
+
+## Browsing Repository Code
+
+**Key Principle:** To read or browse files from a GitHub repo, clone it locally and use normal file tools (Read, Glob, Grep).
+
+### Clone Pattern
+
+```bash
+# Clone to session-scoped temp directory (auto-cleaned on session end)
+clonedir="$TMPDIR/gh-clones-${CLAUDE_SESSION_ID}"
+mkdir -p "$clonedir"
+gh repo clone owner/repo "$clonedir/repo" -- --depth 1
+```
+
+<Accordion title="Why clone instead of fetching files via API?">
+Cloning is:
+- **Faster** for browsing multiple files
+- **More natural** - use Read, Glob, Grep like any local code
+- **More efficient** - one clone vs many API calls
+- **Session-scoped** - auto-cleaned when session ends
+</Accordion>
+
+### Using the Explore Agent
+
+After cloning, use the **Explore agent** to investigate the repo:
+
+```text
+Task(subagent_type="Explore", prompt="In $clonedir/repo/, find how authentication is implemented")
+```
+
+The Explore agent can use Read, Glob, and Grep efficiently across the clone.
+
+### Automatic Cleanup
+
+Cloned repositories are stored in session-scoped temp directories:
+
+```bash
+$TMPDIR/gh-clones-<session-id>/
+```
+
+A **SessionEnd hook** automatically removes them when the session ends. No manual cleanup needed.
+
+## Common Usage Patterns
+
+### View Repository
+
+```bash
+gh repo view owner/repo
+```
+
+### List and View Pull Requests
+
+```bash
+# List PRs
+gh pr list --repo owner/repo
+
+# View specific PR
+gh pr view 123 --repo owner/repo
+
+# View PR with comments
+gh pr view 123 --repo owner/repo --comments
+```
+
+### List and View Issues
+
+```bash
+# List issues
+gh issue list --repo owner/repo
+
+# View specific issue
+gh issue view 456 --repo owner/repo
+```
+
+### API Access
+
+```bash
+# Call any REST API endpoint
+gh api repos/owner/repo/contents/README.md
+
+# With pagination and jq filtering
+gh api repos/owner/repo/pulls --paginate --jq '.[].title'
+
+# GraphQL queries
+gh api graphql -f query='{
+  repository(owner: "owner", name: "repo") {
+    issues(first: 10) {
+      nodes { title }
+    }
+  }
+}'
+```
+
+### Download Release Assets
+
+```bash
+# Download latest release
+gh release download --repo owner/repo
+
+# Download specific release
+gh release download v1.2.3 --repo owner/repo
+
+# Download specific asset
+gh release download v1.2.3 --repo owner/repo --pattern '*.tar.gz'
+```
+
+## Reference Documentation
+
+The skill includes comprehensive reference files:
+
+- **pull-requests.md** - List, view, create, merge, review PRs
+- **issues.md** - List, view, create, close, comment on issues
+- **repos-and-files.md** - View repos, browse files, clone
+- **api.md** - Raw REST/GraphQL access, pagination, jq filtering
+- **releases.md** - List, create, download releases
+- **actions.md** - View runs, trigger workflows, check logs
+
+## Usage Examples
+
+<Tabs>
+  <Tab title="Browse Code">
+    **Before (fails for private repos):**
+    ```text
+    Claude uses WebFetch on github.com/myorg/private-repo/blob/main/src/auth.py
+    → 404 Not Found
+    ```
+    
+    **After (uses gh CLI):**
+    ```bash
+    # Hook intercepts and suggests:
+    clonedir="$TMPDIR/gh-clones-${CLAUDE_SESSION_ID}"
+mkdir -p "$clonedir"
+gh repo clone myorg/private-repo "$clonedir/private-repo" -- --depth 1
+    
+    # Then use Read:
+    Read $clonedir/private-repo/src/auth.py
+    ```
+  </Tab>
+  
+  <Tab title="Fetch API Data">
+    **Before (rate limited):**
+    ```bash
+    curl https://api.github.com/repos/owner/repo/pulls
+    → 403 Rate limit exceeded
+    ```
+    
+    **After (authenticated):**
+    ```bash
+    # Hook intercepts and suggests:
+    gh api repos/owner/repo/pulls --paginate --jq '.[].title'
+    ```
+  </Tab>
+  
+  <Tab title="Download File">
+    **Before:**
+    ```bash
+    curl https://raw.githubusercontent.com/owner/repo/main/README.md
+    ```
+    
+    **After:**
+    ```bash
+    # Hook intercepts and suggests:
+    clonedir="$TMPDIR/gh-clones-${CLAUDE_SESSION_ID}"
+mkdir -p "$clonedir"
+gh repo clone owner/repo "$clonedir/repo" -- --depth 1
+    Read $clonedir/repo/README.md
+    ```
+  </Tab>
+</Tabs>
+
+## Hook Behavior
+
+### PreToolUse Hooks
+
+The plugin includes hooks that run **before** WebFetch and Bash commands:
+
+1. **Fast-fail for non-GitHub URLs** - Exit immediately if URL doesn't match GitHub patterns
+2. **Parse GitHub URLs** - Extract owner/repo/endpoint information
+3. **Suggest `gh` command** - Return the equivalent `gh` CLI command
+4. **No execution blocking** - Claude receives the suggestion and can choose to use it
+
+### SessionEnd Hook
+
+Cleans up cloned repositories when the session ends:
+
+```bash
+rm -rf "$TMPDIR/gh-clones-${CLAUDE_SESSION_ID}"
+```
+
+Concurrent sessions don't interfere with each other (each has unique session ID).
+
+## Benefits
+
+<CardGroup cols={2}>
+  <Card title="Private Repository Access" icon="lock-open">
+    Uses your authenticated token automatically - works with all private repos you have access to.
+  </Card>
+  
+  <Card title="Higher Rate Limits" icon="arrow-up">
+    5,000 requests/hour (authenticated) vs 60 requests/hour (unauthenticated).
+  </Card>
+  
+  <Card title="Complete API Data" icon="database">
+    Authenticated requests return full response data, not limited public information.
+  </Card>
+  
+  <Card title="No Manual Cleanup" icon="trash">
+    Session-scoped temp directories are automatically removed when session ends.
+  </Card>
+</CardGroup>
+
+## Related Skills
+
+- **Devcontainer Setup** - GitHub CLI comes pre-installed in devcontainers
+- **Second Opinion** - Uses `gh pr` commands for code review workflows
+- **Git Cleanup** - Works alongside `gh` for branch management

@@ -1,0 +1,476 @@
+---
+title: "Firebase APK Scanner"
+description: "Scan Android APKs for Firebase security misconfigurations including open databases, storage buckets, and authentication bypasses"
+---
+
+Automated Firebase security testing for Android applications. Scans APKs for Firebase misconfigurations across authentication, databases, storage, and cloud functions.
+
+**Author:** Nick Sellier
+
+<Warning>
+  **For authorized security research only.** Only scan applications you have explicit authorization to test.
+</Warning>
+
+## Installation
+
+```bash
+/plugin install trailofbits/skills/plugins/firebase-apk-scanner
+```
+
+## Prerequisites
+
+Install required dependencies before use:
+
+<Tabs>
+  <Tab title="macOS">
+    ```bash
+    brew install apktool curl jq binutils
+    ```
+  </Tab>
+  
+  <Tab title="Ubuntu/Debian">
+    ```bash
+    sudo apt install apktool curl jq unzip binutils
+    ```
+  </Tab>
+</Tabs>
+
+## When to Use
+
+Use this plugin when you need to:
+
+- Audit Android applications for Firebase misconfigurations
+- Test Firebase endpoints extracted from APKs (Realtime Database, Firestore, Storage)
+- Check authentication security (open signup, anonymous auth, email enumeration)
+- Enumerate Cloud Functions and test for unauthenticated access
+- Perform mobile app security assessments involving Firebase backends
+
+## When NOT to Use
+
+<Warning>
+Do **NOT** use this plugin when:
+</Warning>
+
+- Scanning apps you do not have explicit authorization to test
+- Testing production Firebase projects without written permission
+- You only need to extract Firebase config without testing (use manual grep/strings instead)
+- For non-Android targets (iOS, web apps) - this skill is APK-specific
+- When the target app does not use Firebase
+
+## Commands
+
+### /scan-apk
+
+Scan Android APKs for Firebase security misconfigurations.
+
+```bash
+/scan-apk <apk-file-or-directory>
+```
+
+<ParamField path="apk-file-or-directory" type="string" required>
+  Path to a single .apk file or directory containing multiple APKs
+</ParamField>
+
+## How It Works
+
+<Steps>
+  <Step title="Decompile APK">
+    Uses apktool to decompile the Android application
+  </Step>
+  
+  <Step title="Extract Firebase Config">
+    Searches 7+ sources for Firebase configuration:
+    - google-services.json
+    - XML resources
+    - Assets directory
+    - Smali code
+    - DEX binary strings
+    - React Native bundles
+    - Flutter assets
+  </Step>
+  
+  <Step title="Test Endpoints">
+    Automatically tests discovered Firebase services for vulnerabilities
+  </Step>
+  
+  <Step title="Generate Report">
+    Creates detailed reports with findings and remediation guidance
+  </Step>
+  
+  <Step title="Cleanup">
+    Removes test data created during the scan
+  </Step>
+</Steps>
+
+## Vulnerability Categories
+
+The scanner tests 14 distinct vulnerability categories across 6 Firebase services:
+
+<AccordionGroup>
+  <Accordion title="Authentication" icon="user-lock">
+    <ResponseField name="Open Signup" type="Critical">
+      Tests if unauthenticated users can create accounts
+    </ResponseField>
+    
+    <ResponseField name="Anonymous Auth" type="High">
+      Checks if anonymous authentication is enabled
+    </ResponseField>
+    
+    <ResponseField name="Email Enumeration" type="Medium">
+      Tests for user enumeration via email addresses
+    </ResponseField>
+  </Accordion>
+
+  <Accordion title="Realtime Database" icon="database">
+    <ResponseField name="Unauthenticated Read" type="Critical">
+      Tests if database can be read without authentication
+    </ResponseField>
+    
+    <ResponseField name="Unauthenticated Write" type="Critical">
+      Tests if database can be written without authentication
+    </ResponseField>
+    
+    <ResponseField name="Auth Token Bypass" type="High">
+      Checks if authenticated users can access all data
+    </ResponseField>
+  </Accordion>
+
+  <Accordion title="Firestore" icon="file-lines">
+    <ResponseField name="Document Access" type="Critical">
+      Tests document-level permissions
+    </ResponseField>
+    
+    <ResponseField name="Collection Enumeration" type="High">
+      Checks if collections can be enumerated
+    </ResponseField>
+  </Accordion>
+
+  <Accordion title="Storage" icon="box-archive">
+    <ResponseField name="Bucket Listing" type="Critical">
+      Tests if storage bucket contents can be listed
+    </ResponseField>
+    
+    <ResponseField name="Unauthenticated Upload" type="High">
+      Checks if files can be uploaded without authentication
+    </ResponseField>
+  </Accordion>
+
+  <Accordion title="Cloud Functions" icon="server">
+    <ResponseField name="Unauthenticated Access" type="Medium">
+      Tests if functions can be called without authentication
+    </ResponseField>
+    
+    <ResponseField name="Function Enumeration" type="Low">
+      Checks if functions can be discovered
+    </ResponseField>
+  </Accordion>
+
+  <Accordion title="Remote Config" icon="gear">
+    <ResponseField name="Public Parameter Exposure" type="Medium">
+      Tests if remote config parameters are publicly accessible
+    </ResponseField>
+  </Accordion>
+</AccordionGroup>
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Multi-Framework Support" icon="mobile">
+    Supports native Android, React Native, Flutter, and Cordova apps
+  </Card>
+  
+  <Card title="Comprehensive Extraction" icon="magnifying-glass">
+    Extracts config from 7+ sources including raw DEX binary strings
+  </Card>
+  
+  <Card title="14 Vulnerability Tests" icon="shield-check">
+    Tests authentication, databases, storage, functions, and remote config
+  </Card>
+  
+  <Card title="Automatic Cleanup" icon="broom">
+    Removes test data created during scans
+  </Card>
+</CardGroup>
+
+## Usage Examples
+
+<Tabs>
+  <Tab title="Single APK">
+    ```bash
+    /scan-apk ./myapp.apk
+    ```
+  </Tab>
+  
+  <Tab title="Directory of APKs">
+    ```bash
+    /scan-apk ./apks/
+    ```
+  </Tab>
+  
+  <Tab title="Standalone Script">
+    ```bash
+    ./scanner.sh app.apk
+    ```
+  </Tab>
+  
+  <Tab title="No Cleanup">
+    ```bash
+    ./scanner.sh app.apk --no-cleanup
+    ```
+  </Tab>
+</Tabs>
+
+## Output Reports
+
+The scanner generates comprehensive reports:
+
+### Text Report
+
+Human-readable findings with:
+- Vulnerability descriptions
+- Severity ratings
+- Affected endpoints
+- Remediation guidance
+
+### JSON Report
+
+Machine-readable output for integration with other tools:
+
+```json
+{
+  "scan_timestamp": "2026-03-04T10:30:00Z",
+  "apk_file": "myapp.apk",
+  "vulnerabilities": [
+    {
+      "category": "Realtime Database",
+      "severity": "Critical",
+      "finding": "Unauthenticated read access",
+      "endpoint": "https://myapp.firebaseio.com/",
+      "recommendation": "Implement security rules"
+    }
+  ],
+  "total_vulnerabilities": 5
+}
+```
+
+## Common Findings
+
+<AccordionGroup>
+  <Accordion title="Open Database Read Access">
+    **Severity:** Critical
+    
+    **Description:** The Firebase Realtime Database allows unauthenticated read access to data.
+    
+    **Remediation:**
+    ```json
+    {
+      "rules": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Public Storage Bucket">
+    **Severity:** Critical
+    
+    **Description:** Firebase Storage bucket allows public file listing and download.
+    
+    **Remediation:**
+    ```javascript
+    service firebase.storage {
+      match /b/{bucket}/o {
+        match /{allPaths=**} {
+          allow read, write: if request.auth != null;
+        }
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Anonymous Authentication Enabled">
+    **Severity:** High
+    
+    **Description:** Anonymous authentication is enabled, potentially allowing abuse.
+    
+    **Remediation:**
+    - Disable anonymous auth if not needed
+    - Implement rate limiting
+    - Add additional access controls beyond authentication
+  </Accordion>
+
+  <Accordion title="Unauthenticated Cloud Functions">
+    **Severity:** Medium
+    
+    **Description:** Cloud Functions can be invoked without authentication.
+    
+    **Remediation:**
+    ```javascript
+    exports.myFunction = functions.https.onCall((data, context) => {
+      if (!context.auth) {
+        throw new functions.https.HttpsError(
+          'unauthenticated',
+          'User must be authenticated'
+        );
+      }
+      // Function logic
+    });
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Tested Endpoints
+
+The scanner tests the following Firebase services:
+
+<Steps>
+  <Step title="Authentication">
+    - Email/password signup
+    - Anonymous authentication
+    - Email enumeration
+  </Step>
+  
+  <Step title="Realtime Database">
+    - Read operations
+    - Write operations
+    - Auth token bypass attempts
+  </Step>
+  
+  <Step title="Firestore">
+    - Document access
+    - Collection listing
+    - Query operations
+  </Step>
+  
+  <Step title="Storage">
+    - Bucket listing
+    - File download
+    - File upload
+  </Step>
+  
+  <Step title="Cloud Functions">
+    - Common function names
+    - Unauthenticated invocation
+    - Function enumeration
+  </Step>
+  
+  <Step title="Remote Config">
+    - Parameter exposure
+    - Config fetching
+  </Step>
+</Steps>
+
+## Common Cloud Functions Tested
+
+The scanner automatically tests these common function names:
+
+- Authentication: `login`, `logout`, `register`, `signup`, `authenticate`, `verify`
+- User Management: `createUser`, `deleteUser`, `updateUser`, `getUser`, `getUsers`
+- Data Operations: `getData`, `setData`, `syncData`, `backup`, `restore`
+- File Operations: `uploadFile`, `getFile`, `export`, `import`
+- Notifications: `sendNotification`, `sendEmail`, `notify`, `push`
+- Payment: `processPayment`, `createOrder`, `getOrders`
+- API: `webhook`, `callback`, `api`, `admin`
+- Monitoring: `debug`, `test`, `healthcheck`, `status`, `analytics`
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Authorization">
+    Always obtain written authorization before scanning any application
+  </Accordion>
+
+  <Accordion title="Scope">
+    Clearly define the scope of testing with the application owner
+  </Accordion>
+
+  <Accordion title="Timing">
+    Coordinate testing to avoid production impact
+  </Accordion>
+
+  <Accordion title="Documentation">
+    Document all findings with screenshots and reproduction steps
+  </Accordion>
+
+  <Accordion title="Responsible Disclosure">
+    Follow responsible disclosure practices when reporting vulnerabilities
+  </Accordion>
+</AccordionGroup>
+
+<Tip>
+  Run scans against staging/test environments first to verify the scanner works correctly before testing production applications.
+</Tip>
+
+<Warning>
+  The scanner creates test data in Firebase during scans. While it attempts to clean up automatically, verify that test data is removed after scanning.
+</Warning>
+
+## Limitations
+
+<Note>
+  - **Platform-specific:** Only works with Android APKs
+  - **Firebase-only:** Does not test other backend services
+  - **Configuration extraction:** May not find obfuscated or encrypted Firebase configs
+  - **Dynamic analysis:** Does not include runtime monitoring or traffic interception
+</Note>
+
+## Security Considerations
+
+<Warning>
+  This tool performs active security testing which may:
+  - Create accounts in Firebase Authentication
+  - Write test data to databases
+  - Upload test files to storage buckets
+  - Invoke cloud functions
+  
+  Always ensure you have authorization and understand the impact of testing.
+</Warning>
+
+## Output Directory Structure
+
+```
+firebase_scan_20260304_103000/
+├── decompiled/              # Decompiled APK contents
+│   └── myapp/
+├── results/                 # Individual finding details
+│   ├── auth_findings.txt
+│   ├── database_findings.txt
+│   └── storage_findings.txt
+├── scan_report.txt          # Human-readable report
+└── scan_report.json         # Machine-readable report
+```
+
+## Integration with Other Tools
+
+The JSON output can be integrated with:
+
+- Security information and event management (SIEM) systems
+- Continuous integration/continuous deployment (CI/CD) pipelines
+- Vulnerability management platforms
+- Custom reporting dashboards
+
+<CodeGroup>
+```python Parse JSON Report
+import json
+
+with open('firebase_scan_*/scan_report.json') as f:
+    report = json.load(f)
+    
+critical_vulns = [
+    v for v in report['vulnerabilities']
+    if v['severity'] == 'Critical'
+]
+
+print(f"Found {len(critical_vulns)} critical vulnerabilities")
+```
+
+```bash CI/CD Integration
+#!/bin/bash
+./scanner.sh myapp.apk
+if [ $(jq '.total_vulnerabilities' firebase_scan_*/scan_report.json) -gt 0 ]; then
+    echo "Vulnerabilities found - failing build"
+    exit 1
+fi
+```
+</CodeGroup>

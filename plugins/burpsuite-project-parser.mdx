@@ -1,0 +1,280 @@
+---
+title: "Burp Suite Project Parser"
+description: "Search and extract data from Burp Suite project files for security analysis with Claude"
+---
+
+Search and extract data from Burp Suite project files (.burp) for use in Claude. Parse HTTP traffic, security findings, and audit items directly from your Burp projects.
+
+**Author:** Will Vandevanter
+
+## Installation
+
+```bash
+/plugin install trailofbits/skills/plugins/burpsuite-project-parser
+```
+
+## Prerequisites
+
+Before using this plugin, ensure you have:
+
+<Steps>
+  <Step title="Burp Suite Professional">
+    Required for project file support. Community edition does not support .burp project files.
+  </Step>
+  
+  <Step title="burpsuite-project-file-parser extension">
+    Install the extension from [GitHub](https://github.com/BuffaloWill/burpsuite-project-file-parser)
+  </Step>
+  
+  <Step title="jq (optional)">
+    Recommended for formatting and filtering JSON output
+  </Step>
+</Steps>
+
+## When to Use
+
+Use this plugin when you need to:
+
+- Search response headers or bodies using regex patterns
+- Extract security audit findings and vulnerabilities
+- Dump proxy history or site map data for analysis
+- Programmatically analyze HTTP traffic captured by Burp Suite
+
+**Trigger phrases:** "search the burp project", "find in burp file", "what vulnerabilities in the burp", "get audit items from burp"
+
+## Commands
+
+### /burp-search
+
+Search and extract data from Burp Suite project files.
+
+```bash
+/burp-search <burp-file> [operation]
+```
+
+<ParamField path="burp-file" type="string" required>
+  Path to .burp project file
+</ParamField>
+
+<ParamField path="operation" type="string">
+  Operation to perform: `auditItems`, `proxyHistory`, `siteMap`, `responseHeader='regex'`, `responseBody='regex'`
+</ParamField>
+
+## Available Operations
+
+<AccordionGroup>
+  <Accordion title="auditItems">
+    Extract all security findings from Burp Scanner.
+    
+    **Output:** JSON with name, severity, confidence, host, port, protocol, url
+    
+    ```bash
+    /burp-search project.burp auditItems
+    ```
+  </Accordion>
+
+  <Accordion title="proxyHistory">
+    Dump all captured HTTP traffic from the proxy.
+    
+    **Output:** Complete request/response data
+    
+    ```bash
+    /burp-search project.burp proxyHistory
+    ```
+  </Accordion>
+
+  <Accordion title="siteMap">
+    Dump all site map entries.
+    
+    **Output:** Site structure with all discovered endpoints
+    
+    ```bash
+    /burp-search project.burp siteMap
+    ```
+  </Accordion>
+
+  <Accordion title="responseHeader">
+    Search response headers using regex patterns.
+    
+    **Output:** JSON with url and matching header
+    
+    ```bash
+    /burp-search project.burp "responseHeader='.*Access-Control.*'"
+    ```
+  </Accordion>
+
+  <Accordion title="responseBody">
+    Search response bodies using regex patterns.
+    
+    **Output:** Matching content from response bodies
+    
+    ```bash
+    /burp-search project.burp "responseBody='.*<form.*action.*'"
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Sub-Component Filters
+
+For large projects, filter to specific data to improve performance:
+
+```bash
+proxyHistory.request.headers    # Only request headers
+proxyHistory.request.body       # Only request body
+proxyHistory.response.headers   # Only response headers
+proxyHistory.response.body      # Only response body
+```
+
+Same patterns work with `siteMap.*`
+
+<CodeGroup>
+```bash Filter Request Headers
+/burp-search project.burp proxyHistory.request.headers
+```
+
+```bash Filter Response Body
+/burp-search project.burp proxyHistory.response.body
+```
+</CodeGroup>
+
+## Examples
+
+<Tabs>
+  <Tab title="Security Findings">
+    Extract all high-severity findings:
+    
+    ```bash
+    /burp-search project.burp auditItems | jq 'select(.severity == "High")'
+    ```
+  </Tab>
+  
+  <Tab title="CORS Headers">
+    Search for CORS-related headers:
+    
+    ```bash
+    /burp-search project.burp "responseHeader='.*Access-Control.*'"
+    ```
+  </Tab>
+  
+  <Tab title="Server Signatures">
+    Find server technology signatures:
+    
+    ```bash
+    /burp-search project.burp "responseHeader='.*(nginx|Apache|Servlet).*'"
+    ```
+  </Tab>
+  
+  <Tab title="Request URLs">
+    Extract request URLs from proxy history:
+    
+    ```bash
+    /burp-search project.burp proxyHistory.request.headers | jq -r '.request.url'
+    ```
+  </Tab>
+  
+  <Tab title="HTML Forms">
+    Search for HTML forms in responses:
+    
+    ```bash
+    /burp-search project.burp "responseBody='.*<form.*action.*'"
+    ```
+  </Tab>
+</Tabs>
+
+## Output Format
+
+All output is JSON, one object per line. Pipe to `jq` for formatting or use `grep` for filtering:
+
+<CodeGroup>
+```bash Format with jq
+/burp-search project.burp auditItems | jq .
+```
+
+```bash Filter with grep
+/burp-search project.burp auditItems | grep -i "sql injection"
+```
+</CodeGroup>
+
+## How It Works
+
+<Steps>
+  <Step title="Burp Extension Integration">
+    The plugin uses the burpsuite-project-file-parser extension to access project file data
+  </Step>
+  
+  <Step title="Command-line Access">
+    Runs Burp Suite in headless mode via the bundled JRE to execute search operations
+  </Step>
+  
+  <Step title="JSON Output">
+    Returns structured JSON data for easy parsing and analysis
+  </Step>
+  
+  <Step title="Claude Integration">
+    Claude can analyze the JSON output to identify vulnerabilities and patterns
+  </Step>
+</Steps>
+
+## Environment Variables
+
+Override default paths if needed:
+
+<ParamField path="BURP_JAVA" type="string">
+  Path to Java executable (default: Burp's bundled JRE)
+</ParamField>
+
+<ParamField path="BURP_JAR" type="string">
+  Path to burpsuite_pro.jar
+</ParamField>
+
+### Default Paths
+
+<Tabs>
+  <Tab title="macOS">
+    ```bash
+    BURP_JAVA="/Applications/Burp Suite Professional.app/Contents/Resources/jre.bundle/Contents/Home/bin/java"
+    BURP_JAR="/Applications/Burp Suite Professional.app/Contents/Resources/app/burpsuite_pro.jar"
+    ```
+  </Tab>
+  
+  <Tab title="Linux">
+    ```bash
+    BURP_JAVA="/opt/BurpSuiteProfessional/jre/bin/java"
+    BURP_JAR="/opt/BurpSuiteProfessional/burpsuite_pro.jar"
+    ```
+  </Tab>
+</Tabs>
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Vulnerability Triage" icon="shield-check">
+    Quickly extract and prioritize security findings by severity and confidence
+  </Card>
+  
+  <Card title="Pattern Analysis" icon="magnifying-glass">
+    Search for specific patterns across all captured HTTP traffic
+  </Card>
+  
+  <Card title="Attack Surface Mapping" icon="map">
+    Export site map data to understand application structure
+  </Card>
+  
+  <Card title="Report Generation" icon="file-lines">
+    Extract data for automated security report generation
+  </Card>
+</CardGroup>
+
+## Tips
+
+<Tip>
+  Use sub-component filters like `proxyHistory.response.body` on large projects to improve performance and reduce memory usage.
+</Tip>
+
+<Warning>
+  Ensure the burpsuite-project-file-parser extension is properly installed in Burp Suite before using this plugin.
+</Warning>
+
+<Note>
+  All regex patterns must be properly quoted when passed as command-line arguments. Use single quotes around the entire operation string.
+</Note>

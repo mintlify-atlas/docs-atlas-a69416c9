@@ -1,0 +1,376 @@
+---
+title: Property-Based Testing
+description: Guidance for property-based testing across multiple languages and smart contracts
+icon: flask-vial
+---
+
+Property-based testing (PBT) generates hundreds of random test cases to verify code properties hold across the entire input space, catching edge cases that example-based tests miss.
+
+## Overview
+
+This plugin provides intelligent guidance for writing property-based tests when Claude Code detects suitable patterns in your code. Instead of writing individual example tests, PBT tests properties that should always hold:
+
+- **Roundtrip properties** - `decode(encode(x)) == x`
+- **Idempotence** - `f(f(x)) == f(x)`
+- **Invariants** - Properties preserved across transformations
+- **Commutativity** - `f(a, b) == f(b, a)`
+- **Oracle comparison** - `new_impl(x) == reference(x)`
+
+<Info>
+The plugin automatically suggests PBT when it detects high-value patterns like serialization pairs, parsers, validators, or smart contract invariants.
+</Info>
+
+## When to Use
+
+### Automatic Detection Patterns
+
+The plugin activates when detecting:
+
+<CardGroup cols={2}>
+  <Card title="Serialization Pairs" icon="arrows-rotate">
+    `encode`/`decode`, `serialize`/`deserialize`, `toJSON`/`fromJSON`, `pack`/`unpack`
+  </Card>
+  <Card title="Parsers" icon="code">
+    URL parsing, config parsing, protocol parsing, string-to-structured-data
+  </Card>
+  <Card title="Normalization" icon="filter">
+    `normalize`, `sanitize`, `clean`, `canonicalize`, `format`
+  </Card>
+  <Card title="Validators" icon="check">
+    `is_valid`, `validate`, `check_*` (especially with normalizers)
+  </Card>
+  <Card title="Data Structures" icon="database">
+    Custom collections with `add`/`remove`/`get` operations
+  </Card>
+  <Card title="Smart Contracts" icon="file-contract">
+    Solidity/Vyper contracts, token operations, state invariants, access control
+  </Card>
+</CardGroup>
+
+### Priority Matrix
+
+| Pattern | Property | Priority |
+|---------|----------|----------|
+| encode/decode pair | Roundtrip | **HIGH** |
+| Pure function | Multiple | **HIGH** |
+| Smart contract | State invariants | **HIGH** |
+| Validator | Valid after normalize | MEDIUM |
+| Sorting/ordering | Idempotence + ordering | MEDIUM |
+| Normalization | Idempotence | MEDIUM |
+| Builder/factory | Output invariants | LOW |
+
+## When NOT to Use
+
+<Warning>
+Do NOT use property-based testing for:
+
+- Simple CRUD operations without transformation logic
+- One-off scripts or throwaway code
+- Code with side effects that cannot be isolated (network calls, database writes)
+- Tests where specific example cases are sufficient and edge cases are well-understood
+- Integration or end-to-end testing (PBT is best for unit/component testing)
+</Warning>
+
+## Supported Languages
+
+The plugin provides language-specific guidance for:
+
+<Tabs>
+  <Tab title="General Purpose">
+    - **Python** - Hypothesis
+    - **JavaScript/TypeScript** - fast-check
+    - **Rust** - proptest, quickcheck
+    - **Go** - rapid, gopter
+    - **Java** - jqwik
+    - **Scala** - ScalaCheck
+    - **Haskell** - QuickCheck
+    - **F#** - FsCheck
+    - **Erlang/Elixir** - PropEr, StreamData
+  </Tab>
+  
+  <Tab title="Smart Contracts">
+    - **Solidity** - Echidna, Medusa
+    - **Vyper** - Echidna
+    - **Foundry** - Invariant testing
+  </Tab>
+</Tabs>
+
+See the plugin's `references/libraries.md` for complete library documentation.
+
+## Property Catalog
+
+### Core Properties
+
+<AccordionGroup>
+  <Accordion title="Roundtrip" icon="arrows-rotate">
+    **Formula:** `decode(encode(x)) == x`
+    
+    **When to use:** Serialization, conversion pairs, compress/decompress
+    
+    **Example:**
+    ```python
+    @given(st.text())
+    def test_json_roundtrip(data):
+        assert json.loads(json.dumps(data)) == data
+    ```
+  </Accordion>
+  
+  <Accordion title="Idempotence" icon="repeat">
+    **Formula:** `f(f(x)) == f(x)`
+    
+    **When to use:** Normalization, formatting, sorting, deduplication
+    
+    **Example:**
+    ```python
+    @given(st.lists(st.integers()))
+    def test_sort_idempotent(lst):
+        assert sorted(sorted(lst)) == sorted(lst)
+    ```
+  </Accordion>
+  
+  <Accordion title="Invariant" icon="shield-check">
+    **Formula:** Property holds before and after transformation
+    
+    **When to use:** Any transformation that preserves certain properties
+    
+    **Example:**
+    ```python
+    @given(st.lists(st.integers()))
+    def test_filter_preserves_length(lst):
+        filtered = [x for x in lst if x > 0]
+        assert len(filtered) <= len(lst)
+    ```
+  </Accordion>
+  
+  <Accordion title="Commutativity" icon="right-left">
+    **Formula:** `f(a, b) == f(b, a)`
+    
+    **When to use:** Binary operations, set operations, merge functions
+    
+    **Example:**
+    ```python
+    @given(st.integers(), st.integers())
+    def test_addition_commutative(a, b):
+        assert a + b == b + a
+    ```
+  </Accordion>
+  
+  <Accordion title="Oracle" icon="magnifying-glass">
+    **Formula:** `new_impl(x) == reference(x)`
+    
+    **When to use:** Optimization, refactoring, algorithm replacement
+    
+    **Example:**
+    ```python
+    @given(st.lists(st.integers()))
+    def test_fast_sort_matches_builtin(lst):
+        assert fast_sort(lst) == sorted(lst)
+    ```
+  </Accordion>
+  
+  <Accordion title="Inverse" icon="rotate-left">
+    **Formula:** `f(g(x)) == x`
+    
+    **When to use:** encrypt/decrypt, compress/decompress, add/remove
+    
+    **Example:**
+    ```python
+    @given(st.binary())
+    def test_encryption_inverse(plaintext):
+        ciphertext = encrypt(key, plaintext)
+        assert decrypt(key, ciphertext) == plaintext
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Property Strength Hierarchy
+
+```
+Weakest                                    Strongest
+   ↓                                           ↓
+No Exception → Type Preservation → Invariant → Idempotence → Roundtrip
+```
+
+**Always push for stronger properties:**
+- Start with "no exception" as baseline
+- Look for invariants that must hold
+- Identify idempotence opportunities
+- Seek roundtrip properties for paired operations
+
+## Quick Start Examples
+
+### Python (Hypothesis)
+
+```python
+from hypothesis import given, strategies as st
+import json
+
+@given(st.dictionaries(st.text(), st.integers()))
+def test_json_roundtrip(data):
+    """JSON serialization preserves data"""
+    serialized = json.dumps(data)
+    deserialized = json.loads(serialized)
+    assert deserialized == data
+
+@given(st.text())
+def test_normalize_idempotent(s):
+    """Normalizing twice gives same result as once"""
+    once = normalize(s)
+    twice = normalize(normalize(s))
+    assert once == twice
+```
+
+### JavaScript/TypeScript (fast-check)
+
+```typescript
+import fc from 'fast-check';
+
+test('URL parser roundtrip', () => {
+  fc.assert(
+    fc.property(fc.webUrl(), (url) => {
+      const parsed = parseURL(url);
+      const rebuilt = buildURL(parsed);
+      return normalizeURL(rebuilt) === normalizeURL(url);
+    })
+  );
+});
+```
+
+### Rust (proptest)
+
+```rust
+use proptest::prelude::*;
+
+proptest! {
+    #[test]
+    fn test_serialize_roundtrip(data: Vec<u8>) {
+        let serialized = serialize(&data)?;
+        let deserialized = deserialize(&serialized)?;
+        prop_assert_eq!(data, deserialized);
+    }
+}
+```
+
+### Solidity (Echidna)
+
+```solidity
+contract TokenTest {
+    Token token;
+    
+    // Invariant: total supply equals sum of all balances
+    function echidna_supply_invariant() public view returns (bool) {
+        return token.totalSupply() >= token.balanceOf(address(this));
+    }
+    
+    // Invariant: balance never exceeds total supply
+    function echidna_balance_bounded() public view returns (bool) {
+        return token.balanceOf(msg.sender) <= token.totalSupply();
+    }
+}
+```
+
+## How Claude Suggests PBT
+
+### Existing PBT Library Detected
+
+If the codebase already uses a PBT library, Claude will be direct:
+
+<Note>
+"This codebase uses Hypothesis. I'll write property-based tests for this serialization pair using a roundtrip property."
+</Note>
+
+### No PBT Library
+
+If no library is detected, Claude offers it as an option:
+
+<Note>
+"I notice `encode_message`/`decode_message` is a serialization pair. Property-based testing with a roundtrip property would provide stronger coverage than example tests. Want me to use that approach?"
+</Note>
+
+### User Declines
+
+If you decline, Claude will write good example-based tests without further prompting.
+
+## Advanced Topics
+
+### Custom Generators
+
+For complex domain types, the plugin provides guidance on writing custom generators that produce valid inputs while maintaining coverage.
+
+### Shrinking
+
+When tests fail, PBT libraries automatically find the smallest failing input. The plugin includes guidance on interpreting and acting on shrunk failures.
+
+### State Machine Testing
+
+For stateful systems (databases, caches, smart contracts), the plugin provides patterns for modeling state transitions as properties.
+
+### Performance Properties
+
+Beyond correctness, test performance properties like:
+- Output size bounded by input size
+- Linear time complexity
+- Memory usage within limits
+
+## Antipatterns to Avoid
+
+<Warning>
+**Common mistakes the plugin helps you avoid:**
+
+1. **Testing implementation details** - Test observable behavior, not internals
+2. **Weak properties** - Don't settle for "no exception" when stronger properties exist
+3. **Non-deterministic tests** - Generators should produce deterministic results from the same seed
+4. **Testing trivial properties** - `x == x` is always true, not useful
+5. **Ignoring shrinking output** - Shrunk examples reveal root cause, don't ignore them
+</Warning>
+
+## Rationalizations to Reject
+
+The plugin enforces quality by rejecting these shortcuts:
+
+- **"Example tests are good enough"** - If serialization/parsing/normalization is involved, PBT finds edge cases examples miss
+- **"The function is simple"** - Simple functions with complex input domains benefit most from PBT
+- **"We don't have time"** - PBT tests are often shorter than comprehensive example suites
+- **"It's too hard to write generators"** - Most libraries have excellent built-in strategies
+- **"No crash means it works"** - "No exception" is the weakest property; push for stronger guarantees
+
+## Integration with Other Plugins
+
+- **Spec-to-Code Compliance** - Verify implementation matches specification with property tests
+- **Testing Handbook Skills** - Combine with fuzzing for comprehensive coverage
+- **Constant-Time Analysis** - Test timing properties in crypto code
+
+## Resources
+
+The plugin includes detailed reference documentation:
+
+- `references/generating.md` - Test generation patterns and examples
+- `references/strategies.md` - Custom input generator guidance
+- `references/design.md` - Property-Driven Development approach
+- `references/refactoring.md` - Making code testable with properties
+- `references/reviewing.md` - Quality checklist for existing tests
+- `references/interpreting-failures.md` - Failure analysis and debugging
+- `references/libraries.md` - Complete library documentation by language
+
+## Examples from the Wild
+
+<CardGroup cols={2}>
+  <Card title="Parser Testing" icon="code">
+    URL parser tested with 10,000 random URLs finds edge case with IPv6 zone IDs that example tests missed
+  </Card>
+  <Card title="Serialization Bug" icon="bug">
+    MessagePack encoder/decoder roundtrip test finds corruption on 65536-byte boundary
+  </Card>
+  <Card title="Smart Contract" icon="file-contract">
+    Token invariant testing discovers reentrancy vulnerability in balance update logic
+  </Card>
+  <Card title="Normalization" icon="filter">
+    Unicode normalization tested with random strings finds non-idempotent case with combining characters
+  </Card>
+</CardGroup>
+
+<Note>
+**Author:** Henrik Brodin (Trail of Bits)
+
+**Version:** 1.1.0
+</Note>

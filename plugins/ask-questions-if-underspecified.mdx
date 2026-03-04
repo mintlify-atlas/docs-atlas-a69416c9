@@ -1,0 +1,234 @@
+---
+title: Ask Questions If Underspecified
+description: Clarify ambiguous requirements by asking minimum questions before implementing
+icon: circle-question
+---
+
+<Info>
+Ask the minimum set of clarifying questions needed to avoid wrong work. Only activates when serious doubts arise about requirements.
+</Info>
+
+## Overview
+
+The Ask Questions If Underspecified skill teaches Claude to pause and ask clarifying questions when a request has multiple plausible interpretations or missing critical details. It ensures you don't waste time on wrong implementations.
+
+**Author:** Kevin Valerio
+
+## When to Use
+
+Use this skill when:
+
+- The request has multiple plausible interpretations
+- Success criteria, scope, constraints, or environment details are unclear
+- Starting implementation without clarification risks doing the wrong work
+- Key objectives or "done" criteria are ambiguous
+
+## When NOT to Use
+
+- The request is already clear and unambiguous
+- A quick, low-risk discovery read can answer the missing details
+- You're doing exploratory work where ambiguity is acceptable
+
+## How It Works
+
+### 1. Detect Underspecification
+
+Claude evaluates whether critical details are missing:
+
+- **Objective**: What should change vs stay the same?
+- **Done criteria**: What does success look like?
+- **Scope**: Which files/components are in/out?
+- **Constraints**: Compatibility, performance, style, dependencies?
+- **Environment**: Language versions, OS, build tools?
+- **Safety**: Data migration, rollout, rollback risks?
+
+### 2. Ask Minimal Questions
+
+The skill asks 1-5 must-have questions in a scannable, answerable format:
+
+<CodeGroup>
+```text Multiple Choice Format
+1) Scope?
+a) Minimal change (default)
+b) Refactor while touching the area
+c) Not sure - use default
+
+2) Compatibility target?
+a) Current project defaults (default)
+b) Also support older versions: <specify>
+c) Not sure - use default
+
+Reply with: defaults (or 1a 2a)
+```
+
+```text Before/After Format
+Before I start, I need:
+
+1. Should this modify the existing auth flow or create a new one?
+2. Which users should see this feature (all users, admins only, beta users)?
+3. Any performance constraints? (If not specified, I'll target <300ms response time)
+
+Reply 'defaults' to accept my assumptions in parentheses.
+```
+</CodeGroup>
+
+### 3. Pause Before Acting
+
+Claude will NOT:
+
+- Run commands, edit files, or produce detailed plans that depend on unknowns
+- Make assumptions without explicitly stating them
+
+Claude WILL:
+
+- Perform clearly labeled, low-risk discovery (inspect repo structure, read configs)
+- State assumptions if you ask to proceed without answers
+- Wait for confirmation before implementing
+
+### 4. Confirm Interpretation
+
+Once answers are received, Claude restates requirements in 1-3 sentences before starting work:
+
+<Note>
+"I'll add a new authentication flow for admin users only, using JWT tokens, targeting under 300ms response time. The existing user auth flow will remain unchanged."
+</Note>
+
+## Question Patterns
+
+The skill uses several effective question formats:
+
+### Numbered with Defaults
+
+```text
+1) Scope?
+   a) Minimal change (default)
+   b) Full refactor
+   
+2) Testing requirements?
+   a) Unit tests only (default)
+   b) Unit + integration tests
+
+Reply: defaults (or 1a 2b)
+```
+
+### Fast-Path Response
+
+```text
+Before I start:
+1. Target Python version: 3.11+ (default) or specify
+2. Type hints: Add them (default) or skip
+3. Test coverage: 80% minimum (default) or specify
+
+Reply 'defaults' to accept all recommendations.
+```
+
+### Need-to-Know vs Nice-to-Know
+
+```text
+Need to know:
+1. Which database? (PostgreSQL/MySQL/SQLite)
+2. Schema migration strategy? (Automatic/Manual)
+
+Nice to know:
+- Preferred ORM? (default: SQLAlchemy)
+- Connection pooling size? (default: 10)
+```
+
+## Installation
+
+```bash
+/plugin install trailofbits/skills/plugins/ask-questions-if-underspecified
+```
+
+## Usage Example
+
+<Steps>
+  <Step title="Ambiguous Request">
+    **You:** "Add authentication to the API"
+  </Step>
+  
+  <Step title="Claude Detects Underspecification">
+    Claude recognizes multiple interpretations:
+    - What kind of auth? (JWT, OAuth, API keys, basic auth)
+    - Which endpoints need protection?
+    - New users or existing user table?
+  </Step>
+  
+  <Step title="Minimal Questions Asked">
+    Claude asks 3 questions with defaults:
+    
+    ```text
+    1) Authentication method?
+    a) JWT tokens (recommended)
+    b) OAuth 2.0
+    c) API keys
+    
+    2) Protect which endpoints?
+    a) All endpoints except /health
+    b) Only /admin/* routes
+    c) Custom list
+    
+    3) User management?
+    a) Use existing users table (default)
+    b) Create new auth service
+    
+    Reply: defaults (or 1a 2b 3a)
+    ```
+  </Step>
+  
+  <Step title="Confirmation">
+    **You:** "1a 2a 3a"
+    
+    Claude confirms: "I'll add JWT authentication to all endpoints except /health, using the existing users table. Tokens will expire in 24 hours with refresh support."
+  </Step>
+  
+  <Step title="Implementation">
+    Claude proceeds with the clarified requirements.
+  </Step>
+</Steps>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Ask Early" icon="clock">
+    Ask questions before starting implementation, not after discovering problems mid-work.
+  </Card>
+  
+  <Card title="Offer Defaults" icon="circle-check">
+    Suggest reasonable defaults to reduce decision friction. Mark them clearly.
+  </Card>
+  
+  <Card title="Stay Minimal" icon="list">
+    Ask 1-5 questions in the first pass. Prefer questions that eliminate whole branches of work.
+  </Card>
+  
+  <Card title="Make Scannable" icon="eye">
+    Use numbered questions, multiple choice options, and clear reply formats.
+  </Card>
+</CardGroup>
+
+## Anti-Patterns to Avoid
+
+<Warning>
+**Don't ask questions you can answer with a quick, low-risk discovery read**
+
+Instead of asking "What's your Python version?", read `pyproject.toml` or `.python-version`.
+</Warning>
+
+<Warning>
+**Don't use open-ended questions when multiple-choice would work**
+
+Instead of "What authentication do you want?", offer specific options: JWT, OAuth, API keys.
+</Warning>
+
+<Warning>
+**Don't ask too many questions at once**
+
+Keep it to 1-5 must-have questions. You can ask follow-ups after getting initial answers.
+</Warning>
+
+## Related Skills
+
+- **Devcontainer Setup** - Uses this pattern when detecting project requirements
+- **Modern Python** - Asks about migration preferences before converting legacy tooling
+- **Git Cleanup** - Uses confirmation gates before destructive operations

@@ -1,0 +1,334 @@
+---
+title: 'Semgrep Rule Variant Creator'
+description: 'Port existing Semgrep rules to new target languages with applicability analysis and test-driven validation'
+---
+
+Port existing Semgrep rules to new target languages with proper applicability analysis and independent test-driven validation for each language variant.
+
+## Overview
+
+The Semgrep Rule Variant Creator plugin takes an existing Semgrep rule and one or more target languages, then generates independent rule variants for each applicable language. Each variant goes through a complete 4-phase cycle ensuring quality and correctness.
+
+**Key capabilities:**
+- Applicability analysis before porting
+- Independent 4-phase cycle per language
+- Test-first methodology for each variant
+- Language-specific idiom adaptation
+- Proper validation before proceeding
+
+## Installation
+
+```bash
+/plugin install trailofbits/skills/plugins/semgrep-rule-variant-creator
+```
+
+## Prerequisites
+
+- [Semgrep](https://semgrep.dev/docs/getting-started/) installed and available in PATH
+- Existing Semgrep rule to port (in YAML format)
+- Target languages specified
+
+## When to Use
+
+Use this plugin when you need to:
+- Port an existing Semgrep rule to one or more target languages
+- Create language-specific variants of a universal vulnerability pattern
+- Expand rule coverage across a polyglot codebase
+- Translate rules between languages with equivalent constructs
+
+## When NOT to Use
+
+Do NOT use this plugin for:
+- Creating a new Semgrep rule from scratch (use `semgrep-rule-creator` instead)
+- Running existing rules against code
+- Languages where the vulnerability pattern fundamentally doesn't apply
+- Minor syntax variations within the same language
+
+## Input Specification
+
+This plugin requires:
+
+1. **Existing Semgrep rule** - YAML file path or YAML rule content
+2. **Target languages** - One or more languages to port to
+
+Example invocations:
+```
+Port the sql-injection.yaml Semgrep rule to Go and Java
+```
+
+```
+Create Semgrep rule variants of my-rule.yaml for TypeScript, Rust, and C#
+```
+
+```
+Port this Semgrep rule to Golang
+```
+
+## Output Structure
+
+For each applicable target language, produces:
+
+```
+<original-rule-id>-<language>/
+├── <original-rule-id>-<language>.yaml     # Ported rule
+└── <original-rule-id>-<language>.<ext>    # Test file
+```
+
+### Example Output
+
+**Input:**
+- Rule: `python-command-injection.yaml`
+- Target languages: Go, Java
+
+**Output:**
+```
+python-command-injection-golang/
+├── python-command-injection-golang.yaml
+└── python-command-injection-golang.go
+
+python-command-injection-java/
+├── python-command-injection-java.yaml
+└── python-command-injection-java.java
+```
+
+## Four-Phase Workflow
+
+Each target language goes through an independent 4-phase cycle:
+
+<Steps>
+  <Step title="Phase 1: Applicability Analysis">
+    Determine if the vulnerability pattern applies to the target language before proceeding.
+    
+    **Analysis criteria:**
+    - Does the vulnerability class exist in the target language?
+    - Does an equivalent construct exist (function, pattern, library)?
+    - Are the semantics similar enough for meaningful detection?
+    
+    **Verdict options:**
+    - `APPLICABLE` → Proceed with variant creation
+    - `APPLICABLE_WITH_ADAPTATION` → Proceed but significant changes needed
+    - `NOT_APPLICABLE` → Skip this language, document why
+  </Step>
+  
+  <Step title="Phase 2: Test Creation">
+    Write tests BEFORE the rule using target language idioms.
+    
+    Create test file with:
+    - Minimum 2 vulnerable cases (`ruleid:`)
+    - Minimum 2 safe cases (`ok:`)
+    - Language-specific edge cases
+    
+    ```go
+    // ruleid: sql-injection-golang
+    db.Query("SELECT * FROM users WHERE id = " + userInput)
+    
+    // ok: sql-injection-golang
+    db.Query("SELECT * FROM users WHERE id = ?", userInput)
+    ```
+  </Step>
+  
+  <Step title="Phase 3: Rule Creation">
+    Translate the original rule to the target language.
+    
+    1. **Analyze AST**: `semgrep --dump-ast -l <lang> test-file`
+    2. **Translate patterns** to target language syntax
+    3. **Update metadata**: language key, message, rule ID
+    4. **Adapt for idioms**: Handle language-specific constructs
+  </Step>
+  
+  <Step title="Phase 4: Validation">
+    Validate YAML and run tests to ensure correctness.
+    
+    ```bash
+    # Validate YAML
+    semgrep --validate --config rule.yaml
+    
+    # Run tests
+    semgrep --test --config rule.yaml test-file
+    ```
+    
+    **Checkpoint**: Output MUST show `All tests passed`.
+    
+    For taint rule debugging:
+    ```bash
+    semgrep --dataflow-traces -f rule.yaml test-file
+    ```
+  </Step>
+</Steps>
+
+<Info>
+Complete the full 4-phase cycle for each language before moving to the next. Do not batch languages together.
+</Info>
+
+## Applicability Analysis Details
+
+Before porting, perform thorough analysis:
+
+### Does the Vulnerability Class Exist?
+
+Examples:
+- **Buffer overflow**: Applies to C/C++, may apply to Rust (in unsafe blocks), does NOT apply to Python/Java
+- **SQL injection**: Applies to any language with database access
+- **XSS**: Applies to any language generating HTML output
+
+### Does an Equivalent Construct Exist?
+
+Parse the original rule to identify:
+- **Sinks**: What dangerous functions/methods does it detect?
+- **Sources**: Where does tainted data originate?
+- **Pattern type**: Is it taint-mode or pattern-matching?
+
+Then research the target language:
+- What are the equivalent dangerous functions?
+- What are the common source patterns?
+- Are there language-specific idioms to consider?
+
+### Example Analysis
+
+```
+Original: Python os.system(user_input)
+Target: Go exec.Command(user_input)
+
+VERDICT: APPLICABLE
+REASONING: Both execute shell commands with user input. Vulnerability is
+identical (command injection). Detection logic (taint from input to exec)
+translates directly.
+```
+
+## Example Variant Creation
+
+Let's port a Python SQL injection rule to Go:
+
+<CodeGroup>
+
+```yaml python-sql-injection.yaml (Original)
+rules:
+  - id: sql-injection
+    languages: [python]
+    severity: ERROR
+    message: SQL query constructed from user input
+    mode: taint
+    pattern-sources:
+      - pattern: request.args.get(...)
+    pattern-sinks:
+      - pattern: cursor.execute($QUERY, ...)
+```
+
+```yaml sql-injection-golang.yaml (Ported)
+rules:
+  - id: sql-injection-golang
+    languages: [go]
+    severity: ERROR
+    message: SQL query constructed from user input
+    mode: taint
+    pattern-sources:
+      - pattern: r.URL.Query().Get(...)
+      - pattern: r.FormValue(...)
+    pattern-sinks:
+      - pattern: $DB.Query($QUERY, ...)
+      - pattern: $DB.Exec($QUERY, ...)
+```
+
+```go sql-injection-golang.go (Tests)
+package main
+
+import (
+    "database/sql"
+    "net/http"
+)
+
+func handler1(w http.ResponseWriter, r *http.Request, db *sql.DB) {
+    // ruleid: sql-injection-golang
+    id := r.URL.Query().Get("id")
+    db.Query("SELECT * FROM users WHERE id = " + id)
+}
+
+func handler2(w http.ResponseWriter, r *http.Request, db *sql.DB) {
+    // ruleid: sql-injection-golang
+    id := r.FormValue("id")
+    db.Exec("DELETE FROM users WHERE id = " + id)
+}
+
+func handler3(w http.ResponseWriter, r *http.Request, db *sql.DB) {
+    // ok: sql-injection-golang
+    id := r.URL.Query().Get("id")
+    db.Query("SELECT * FROM users WHERE id = ?", id)
+}
+
+func handler4(w http.ResponseWriter, r *http.Request, db *sql.DB) {
+    // ok: sql-injection-golang
+    db.Query("SELECT * FROM users WHERE id = 1")
+}
+```
+
+</CodeGroup>
+
+## Key Differences from Rule Creator
+
+| Aspect | semgrep-rule-creator | semgrep-rule-variant-creator |
+|--------|---------------------|------------------------------|
+| Input | Bug pattern description | Existing rule + target languages |
+| Output | Single rule+test | Multiple rule+test directories |
+| Workflow | Single creation cycle | Independent cycle per language |
+| Phase 1 | Problem analysis | Applicability analysis |
+
+## Rationalizations to Reject
+
+When porting Semgrep rules, reject these common shortcuts:
+
+| Rationalization | Why It Fails | Correct Approach |
+|-----------------|--------------|------------------|
+| "Pattern structure is identical" | Different ASTs across languages | Always dump AST for target language |
+| "Same vulnerability, same detection" | Data flow differs between languages | Analyze target language idioms |
+| "Rule doesn't need tests since original worked" | Language edge cases differ | Write NEW test cases for target |
+| "Skip applicability - it obviously applies" | Some patterns are language-specific | Complete applicability analysis first |
+| "I'll create all variants then test" | Errors compound, hard to debug | Complete full cycle per language |
+| "Library equivalent is close enough" | Surface similarity hides differences | Verify API semantics match |
+| "Just translate the syntax 1:1" | Languages have different idioms | Research target language patterns |
+
+## Strictness Principles
+
+<Warning>
+**Non-negotiable requirements:**
+- Applicability analysis is mandatory: Don't assume patterns translate
+- Each language is independent: Complete full cycle before moving to next
+- Test-first for each variant: Never write a rule without test cases
+- 100% test pass required: "Most tests pass" is not acceptable
+</Warning>
+
+## Commands
+
+| Task | Command |
+|------|---------|
+| Run tests | `semgrep --test --config rule.yaml test-file` |
+| Validate YAML | `semgrep --validate --config rule.yaml` |
+| Dump AST | `semgrep --dump-ast -l <lang> <file>` |
+| Debug taint flow | `semgrep --dataflow-traces -f rule.yaml file` |
+
+## Foundational Knowledge
+
+The `semgrep-rule-creator` plugin is the authoritative reference for Semgrep rule creation fundamentals. Consult it for guidance on:
+
+- When to use taint mode vs pattern matching
+- Test-first methodology
+- Anti-patterns to avoid
+- Iterating until tests pass
+- Rule optimization
+
+When porting a rule, you're applying these same principles in a new language context.
+
+## Related Plugins
+
+- **semgrep-rule-creator** - Create new Semgrep rules from scratch
+- **static-analysis** - Run existing Semgrep rules against code
+- **variant-analysis** - Find similar vulnerabilities across codebases
+
+## Additional Resources
+
+- [Semgrep Pattern Examples](https://semgrep.dev/docs/writing-rules/pattern-examples) - Per-language pattern references
+- [Semgrep Testing Rules](https://semgrep.dev/docs/writing-rules/testing-rules) - Testing annotations
+- [Trail of Bits Testing Handbook](https://appsec.guide/docs/static-analysis/semgrep/advanced/) - Advanced patterns
+
+<Card title="Author" icon="user">
+  Maciej Domanski (opensource@trailofbits.com)
+</Card>

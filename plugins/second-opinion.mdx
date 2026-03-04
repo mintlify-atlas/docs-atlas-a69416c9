@@ -1,0 +1,398 @@
+---
+title: Second Opinion
+description: Run external LLM code reviews using OpenAI Codex or Google Gemini CLI
+icon: code-compare
+---
+
+<Info>
+Get independent code reviews from external LLM CLIs (OpenAI Codex, Google Gemini) on uncommitted changes, branch diffs, or specific commits.
+</Info>
+
+## Overview
+
+The Second Opinion plugin shells out to external LLM CLIs for independent code reviews powered by separate models. It supports both OpenAI Codex CLI and Google Gemini CLI, with options to run them individually or compare results side-by-side.
+
+**Author:** Dan Guido
+
+## Features
+
+<CardGroup cols={2}>
+  <Card title="Dual Model Support" icon="code-fork">
+    Run reviews with OpenAI Codex (gpt-5.3-codex) or Google Gemini (gemini-3.1-pro-preview), or both for comparison
+  </Card>
+  
+  <Card title="Multiple Scopes" icon="layer-group">
+    Review uncommitted changes, branch diffs vs main, or specific commits
+  </Card>
+  
+  <Card title="Focused Reviews" icon="crosshairs">
+    General review, security, performance, or error handling focus areas
+  </Card>
+  
+  <Card title="Project-Aware" icon="book">
+    Optionally include CLAUDE.md or AGENTS.md for context-aware reviews
+  </Card>
+</CardGroup>
+
+## Prerequisites
+
+### OpenAI Codex CLI
+
+<Steps>
+  <Step title="Install Codex CLI">
+    ```bash
+    npm i -g @openai/codex
+    ```
+  </Step>
+  
+  <Step title="Configure Authentication">
+    Requires OpenAI API key or ChatGPT Plus subscription configured for Codex
+  </Step>
+</Steps>
+
+### Google Gemini CLI
+
+<Steps>
+  <Step title="Install Gemini CLI">
+    ```bash
+    npm i -g @google/gemini-cli
+    ```
+  </Step>
+  
+  <Step title="Authenticate">
+    ```bash
+    gemini auth login
+    ```
+  </Step>
+  
+  <Step title="Install Extensions">
+    ```bash
+    gemini extensions install https://github.com/gemini-cli-extensions/code-review
+    gemini extensions install https://github.com/gemini-cli-extensions/security
+    ```
+  </Step>
+</Steps>
+
+## Installation
+
+```bash
+/plugin marketplace add trailofbits/skills
+/plugin install second-opinion
+```
+
+## Usage
+
+<Steps>
+  <Step title="Invoke the Command">
+    ```text
+    /second-opinion
+    ```
+    
+    or with inline arguments:
+    
+    ```text
+    /second-opinion check the uncommitted changes for security issues
+    ```
+  </Step>
+  
+  <Step title="Answer Questions">
+    Claude asks up to 4 questions (skips any already specified):
+    
+    1. **Review tool** - Codex, Gemini, or both (default: both)
+    2. **Review scope** - Uncommitted, branch diff, or specific commit
+    3. **Project context** - Include CLAUDE.md/AGENTS.md? (if exists)
+    4. **Review focus** - General, security, performance, or error handling
+  </Step>
+  
+  <Step title="Review Diff Stats">
+    Claude shows what will be reviewed:
+    
+    ```text
+    6 files changed, 103 insertions(+), 15 deletions(-)
+    ```
+    
+    If the diff is empty, Claude stops. If very large (>2000 lines), Claude warns.
+  </Step>
+  
+  <Step title="Run Review">
+    For "Both" (default), Claude runs Codex and Gemini in parallel.
+    
+    For single tool, Claude runs just that tool.
+  </Step>
+  
+  <Step title="View Results">
+    Results are presented with clear headers:
+    
+    ```markdown
+    ## Codex Review (gpt-5.3-codex)
+    [structured findings by priority]
+    
+    ## Gemini Review (gemini-3.1-pro-preview)
+    [gemini output]
+    
+    ## Summary
+    Both reviews agree on:
+    - Missing input validation in auth.py:45
+    
+    Codex flagged but Gemini didn't:
+    - Performance concern in db.py:123
+    ```
+  </Step>
+</Steps>
+
+## Review Scopes
+
+### Uncommitted Changes
+
+Reviews all uncommitted work (tracked and untracked files):
+
+```bash
+git diff HEAD
+git ls-files --others --exclude-standard
+```
+
+### Branch Diff vs Main
+
+Reviews all changes in current branch since it diverged from default branch:
+
+```bash
+# Auto-detects default branch (main, master, etc.)
+git diff <default-branch>...HEAD
+```
+
+### Specific Commit
+
+Reviews changes introduced by a single commit:
+
+```bash
+git diff <sha>~1..<sha>
+```
+
+## Focus Areas
+
+<Tabs>
+  <Tab title="General Review">
+    Broad code review covering:
+    - Code quality and maintainability
+    - Potential bugs and edge cases
+    - Best practices and patterns
+    - Documentation completeness
+  </Tab>
+  
+  <Tab title="Security & Auth">
+    Security-focused review:
+    - Input validation and sanitization
+    - Authentication and authorization
+    - Secrets and credentials management
+    - Injection vulnerabilities
+    - Dependency vulnerabilities (if manifest changed)
+  </Tab>
+  
+  <Tab title="Performance">
+    Performance-focused review:
+    - Algorithm efficiency (O(n) analysis)
+    - Database query optimization
+    - Memory usage and leaks
+    - Caching opportunities
+    - Blocking operations
+  </Tab>
+  
+  <Tab title="Error Handling">
+    Error handling review:
+    - Uncaught exceptions
+    - Error propagation
+    - User-facing error messages
+    - Logging and observability
+    - Graceful degradation
+  </Tab>
+</Tabs>
+
+## Codex vs Gemini
+
+| Feature | Codex | Gemini |
+|---------|-------|--------|
+| **Model** | gpt-5.3-codex | gemini-3.1-pro-preview |
+| **Reasoning** | xhigh | Default |
+| **Output** | Structured JSON findings by priority | Natural language |
+| **Headless** | `codex exec` with stdin | `gemini -p` with stdin |
+| **Extensions** | None | code-review, security |
+| **Dependency Scan** | N/A | `/security:scan-deps` (when security focus + manifest changed) |
+
+<Note>
+Running **both** (the default) provides comparison and validation. Where they agree, findings are higher confidence.
+</Note>
+
+## Codex Invocation Details
+
+```bash
+codex exec \
+  --sandbox read-only \
+  --ephemeral \
+  --output-schema codex-review-schema.json \
+  -o "$output_file" \
+  - < "$prompt_file"
+```
+
+- Uses OpenAI's published code review prompt (fine-tuned into model)
+- Diff is piped via stdin with the prompt
+- `--output-schema` produces structured JSON findings
+- `-o` captures only final message (no thinking/exec noise)
+- Falls back to `gpt-5.2-codex` on auth errors
+- Timeout: 600 seconds
+
+## Gemini Invocation Details
+
+### Uncommitted General Review
+
+```bash
+gemini -p "/code-review" --yolo -e code-review
+```
+
+### Branch/Commit Diffs
+
+```bash
+git diff <scope> > /tmp/review-diff.txt
+{ printf '%s\n\n' 'Review this diff for issues.'; cat /tmp/review-diff.txt; } \
+  | gemini -p - --yolo -m gemini-3.1-pro-preview
+```
+
+### Security Focus
+
+```bash
+# With custom security prompt piped to stdin
+gemini -p - --yolo -m gemini-3.1-pro-preview -e gemini-cli-security
+```
+
+<Warning>
+**Safety Note:** Gemini CLI is invoked with `--yolo`, which auto-approves all tool calls without confirmation. Required for headless operation.
+</Warning>
+
+## Dependency Scanning
+
+When security focus is selected AND the diff touches dependency manifest files, Claude also runs:
+
+```bash
+/security:scan-deps
+```
+
+**Manifest files detected:**
+- `package.json`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`
+- `requirements.txt`, `setup.py`, `pyproject.toml`, `uv.lock`, `poetry.lock`
+- `Cargo.toml`, `Cargo.lock`
+- `go.mod`, `go.sum`
+- `Gemfile`, `*.gemspec`
+- `composer.json`, `composer.lock`
+
+<Note>
+The scan is skipped if no manifest files are in the diff, since it analyzes the entire dependency tree (time-consuming with zero value when deps weren't touched).
+</Note>
+
+## Usage Examples
+
+<Tabs>
+  <Tab title="Both Tools (Default)">
+    ```text
+    User: /second-opinion
+    
+    Claude: [asks 4 questions]
+    
+    User: defaults (both tools, uncommitted, no context, general)
+    
+    Claude: [shows diff stats: 3 files, +45 -10]
+    
+    Claude: [runs codex exec and gemini in parallel]
+    
+    Claude:
+    ## Codex Review (gpt-5.3-codex)
+    
+    ### High Priority
+    - auth.py:45 - Missing input validation on username parameter
+    
+    ### Medium Priority
+    - db.py:123 - N+1 query in user lookup loop
+    
+    ## Gemini Review (gemini-3.1-pro-preview)
+    
+    Found potential issues:
+    1. The username field in auth.py is not validated...
+    2. Consider adding rate limiting to the login endpoint...
+    
+    ## Summary
+    Both reviews flagged the missing input validation in auth.py:45.
+    Codex also identified a performance issue in db.py:123.
+    ```
+  </Tab>
+  
+  <Tab title="Inline Arguments">
+    ```text
+    User: /second-opinion check uncommitted changes for security issues
+    
+    Claude: [scope: uncommitted, focus: security already specified]
+    Claude: [asks 2 questions: tool, project context]
+    
+    User: codex only, yes include CLAUDE.md
+    
+    Claude: [shows diff stats: 6 files, +103 -15]
+    
+    Claude: [assembles prompt with CLAUDE.md + security focus + diff]
+    
+    Claude: [runs codex exec]
+    
+    Claude:
+    ## Codex Review (gpt-5.3-codex)
+    
+    ### Critical
+    - api/auth.py:67 - SQL injection vulnerability in raw query
+    
+    ### High Priority
+    - api/auth.py:45 - Password stored in plaintext logs
+    - config.py:12 - Hardcoded API key
+    ```
+  </Tab>
+  
+  <Tab title="Large Diff Warning">
+    ```text
+    User: /second-opinion
+    
+    Claude: [asks questions]
+    
+    User: both, uncommitted, general
+    
+    Claude: [shows diff stats: 45 files, +3200 -890]
+    
+    Claude: "Large diff (3200+ lines). This may take several minutes.
+             Proceed, or narrow the scope (specific files, branch, commit)?"
+    
+    User: "proceed"
+    
+    Claude: [runs both reviews with 600s timeout]
+    ```
+  </Tab>
+</Tabs>
+
+## Error Handling
+
+| Error | Action |
+|-------|--------|
+| `codex: command not found` | Show install: `npm i -g @openai/codex` |
+| `gemini: command not found` | Show install: `npm i -g @google/gemini-cli` |
+| Gemini extension missing | Show install: `gemini extensions install <url>` |
+| Model auth error (Codex) | Retry with `gpt-5.2-codex` |
+| Empty diff | Stop and inform user |
+| Timeout | Inform user, suggest narrowing scope |
+| Tool partially unavailable | Run only available tool, note the skip |
+
+## Codex MCP Tools
+
+This plugin bundles Codex CLI's built-in MCP server (`codex mcp-server`), which auto-starts when the plugin is installed:
+
+- **codex** - Start new Codex session with prompt, model, sandbox, approval policy
+- **codex-reply** - Continue existing session by thread ID for multi-turn conversations
+
+These tools work independently of the `/second-opinion` command. Use them for direct programmatic access to Codex.
+
+## Related Skills
+
+- **Modern Python** - Reviews can check for modern Python best practices
+- **GH CLI** - Can review branch diffs before opening PRs
+- **Git Cleanup** - Can review branches before cleanup

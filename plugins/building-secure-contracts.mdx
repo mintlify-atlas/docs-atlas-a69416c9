@@ -1,0 +1,339 @@
+---
+title: Building Secure Contracts
+description: Comprehensive smart contract security toolkit with vulnerability scanners and development guideline assistants
+---
+
+Comprehensive smart contract security toolkit based on Trail of Bits' [Building Secure Contracts](https://github.com/crytic/building-secure-contracts) framework. This plugin provides 11 specialized skills for smart contract security across multiple blockchain platforms.
+
+## Overview
+
+The plugin includes two categories of skills:
+
+- **6 Vulnerability Scanners** - Platform-specific attack pattern detection
+- **5 Development Guidelines Assistants** - Secure development best practices
+
+## Installation
+
+```bash
+/plugin install trailofbits/skills/plugins/building-secure-contracts
+```
+
+## Supported Blockchains
+
+<CardGroup cols={3}>
+  <Card title="Algorand" icon="a">
+    TEAL/PyTeal smart contracts
+  </Card>
+  <Card title="Cairo" icon="c">
+    StarkNet contracts
+  </Card>
+  <Card title="Cosmos" icon="atom">
+    Cosmos SDK modules
+  </Card>
+  <Card title="Solana" icon="s">
+    Native Rust & Anchor programs
+  </Card>
+  <Card title="Substrate" icon="leaf">
+    Substrate pallets
+  </Card>
+  <Card title="TON" icon="t">
+    FunC smart contracts
+  </Card>
+</CardGroup>
+
+## Vulnerability Scanners
+
+Platform-specific vulnerability detection based on Trail of Bits' [Not So Smart Contracts](https://github.com/crytic/not-so-smart-contracts) repository.
+
+<AccordionGroup>
+  <Accordion title="Algorand Vulnerability Scanner" icon="a">
+    **Skill:** `/algorand-vulnerability-scanner`
+    
+    Scans Algorand/TEAL codebases for **11 vulnerability patterns**:
+    
+    - Rekeying vulnerabilities
+    - Unchecked transaction fees
+    - Asset closing issues
+    - Group size checks
+    - Time-based replay attacks
+    - CloseRemainderTo validation
+    - AssetCloseTo validation
+    - Transaction type confusion
+    - Improper escrow handling
+    - Fee manipulation
+    - Lease validation issues
+    
+    **Use when:** Auditing Algorand smart contracts, reviewing TEAL/PyTeal code, or preparing for deployment on Algorand.
+  </Accordion>
+
+  <Accordion title="Cairo Vulnerability Scanner" icon="c">
+    **Skill:** `/cairo-vulnerability-scanner`
+    
+    Analyzes StarkNet/Cairo smart contracts for **6 vulnerability patterns**:
+    
+    - Arithmetic overflow/underflow
+    - Reentrancy vulnerabilities
+    - Uninitialized storage
+    - Authorization bypass
+    - Improper access control
+    - State manipulation issues
+    
+    **Use when:** Auditing StarkNet contracts, reviewing Cairo implementations, or validating access control patterns.
+  </Accordion>
+
+  <Accordion title="Cosmos Vulnerability Scanner" icon="atom">
+    **Skill:** `/cosmos-vulnerability-scanner`
+    
+    Detects security issues in Cosmos SDK modules for **9 patterns**:
+    
+    - Undelegation time validation
+    - Amount validation issues
+    - Unbonding validation
+    - Rounding issues in calculations
+    - Delegation state manipulation
+    - Validator set manipulation
+    - Slashing bypass
+    - Reward distribution errors
+    - Token minting vulnerabilities
+    
+    **Use when:** Building Cosmos SDK modules, reviewing blockchain logic, or auditing staking mechanisms.
+  </Accordion>
+
+  <Accordion title="Solana Vulnerability Scanner" icon="s">
+    **Skill:** `/solana-vulnerability-scanner`
+    
+    Scans Solana/Anchor programs for **6 critical vulnerabilities**:
+    
+    - **Arbitrary CPI** - User-controlled program IDs in cross-program invocations
+    - **Improper PDA Validation** - Using create_program_address without canonical bump
+    - **Missing Ownership Check** - Deserializing accounts without owner validation
+    - **Missing Signer Check** - Authority operations without is_signer verification
+    - **Sysvar Account Check** - Spoofed sysvar accounts (pre-Solana 1.8.1)
+    - **Improper Instruction Introspection** - Absolute indexes allowing reuse attacks
+    
+    **Use when:** Auditing Solana programs (native or Anchor), reviewing CPI logic, or validating PDA implementations.
+    
+    <Note>
+    Supports both native Solana programs and Anchor framework. Integrates with Trail of Bits Solana Lints when available.
+    </Note>
+  </Accordion>
+
+  <Accordion title="Substrate Vulnerability Scanner" icon="leaf">
+    **Skill:** `/substrate-vulnerability-scanner`
+    
+    Analyzes Substrate pallets for **7 security issues**:
+    
+    - BadOrigin handling
+    - Insufficient weight calculations
+    - Panics on overflow
+    - Unsigned transaction validation
+    - Storage manipulation
+    - Runtime upgrade issues
+    - Extrinsic validation bypass
+    
+    **Use when:** Building Substrate pallets, reviewing runtime code, or auditing parachain logic.
+  </Accordion>
+
+  <Accordion title="TON Vulnerability Scanner" icon="t">
+    **Skill:** `/ton-vulnerability-scanner`
+    
+    Detects vulnerabilities in TON smart contracts for **3 patterns**:
+    
+    - Replay protection failures
+    - Unprotected receiver functions
+    - Sender validation issues
+    
+    **Use when:** Auditing TON smart contracts, reviewing FunC code, or validating message handling.
+  </Accordion>
+</AccordionGroup>
+
+## Development Guidelines Assistants
+
+Based on Trail of Bits' [Development Guidelines](https://github.com/crytic/building-secure-contracts/tree/master/development-guidelines).
+
+### Audit Prep Assistant
+
+**Skill:** `/audit-prep-assistant`
+
+Prepare your codebase for security reviews with a comprehensive 4-step checklist:
+
+1. **Set Review Goals** - Define security objectives and areas of concern
+2. **Resolve Easy Issues** - Run static analysis (Slither, dylint, golangci-lint) and fix low-hanging fruit
+3. **Ensure Accessibility** - Create build instructions, freeze commits, clarify scope
+4. **Generate Documentation** - Create flowcharts, user stories, glossaries, and inline comments
+
+**Timeline:** Use this 1-2 weeks before your audit to maximize review effectiveness.
+
+**Output:** Complete audit preparation package with clean static analysis, high test coverage, comprehensive documentation, and a preparation checklist.
+
+### Code Maturity Assessor
+
+**Skill:** `/code-maturity-assessor`
+
+Systematic code maturity evaluation using Trail of Bits' 9-category framework:
+
+- Arithmetic safety
+- Auditing practices
+- Authentication/Access controls
+- Complexity management
+- Decentralization
+- Documentation quality
+- Transaction ordering risks
+- Low-level manipulation
+- Testing and verification
+
+**Output:** Professional maturity scorecard with evidence-based ratings (Immature/Developing/Mature/Robust) and improvement roadmap.
+
+### Guidelines Advisor
+
+**Skill:** `/guidelines-advisor`
+
+Comprehensive development best practices advisor covering:
+
+- **Documentation & Specifications** - Generate system descriptions and architectural diagrams
+- **Architecture Analysis** - Optimize on-chain/off-chain distribution
+- **Upgradeability Review** - Assess upgrade patterns and delegatecall proxies
+- **Implementation Quality** - Review functions, inheritance, events
+- **Common Pitfalls** - Identify security anti-patterns
+- **Dependencies** - Evaluate library usage
+- **Testing** - Suggest test improvements
+
+**Use throughout development** for architectural and implementation guidance.
+
+### Secure Workflow Guide
+
+**Skill:** `/secure-workflow-guide`
+
+Interactive 5-step secure development workflow:
+
+1. **Known Security Issues** - Run Slither with 70+ detectors
+2. **Special Features** - Check upgradeability, ERC conformance, token integration
+3. **Visual Inspection** - Generate inheritance graphs, function summaries, authorization maps
+4. **Security Properties** - Document properties, set up Echidna/Manticore
+5. **Manual Review** - Analyze privacy, front-running, cryptography, DeFi risks
+
+**Use on every check-in** or before deployment for continuous security validation.
+
+### Token Integration Analyzer
+
+**Skill:** `/token-integration-analyzer`
+
+Comprehensive token security analysis for both implementations and integrations:
+
+- **ERC20/ERC721 Conformity** - Validate standard compliance
+- **Contract Composition** - Assess complexity and SafeMath usage
+- **Owner Privileges** - Review upgradeability, minting, pausability, blacklists
+- **20+ Weird Token Patterns** - Check for non-standard behaviors:
+  - Missing return values
+  - Fee-on-transfer tokens
+  - Rebasing tokens
+  - Double entry point tokens
+  - Flash mintable tokens
+  - Revert on zero-value transfers
+- **On-chain Analysis** - Query deployed contracts for scarcity and distribution
+- **Integration Safety** - Verify defensive patterns and safe transfer usage
+
+**Use when** building tokens or integrating with external tokens.
+
+## Usage Examples
+
+### Pre-Audit Preparation Workflow
+
+```bash
+# Step 1: Run comprehensive security checks
+/secure-workflow-guide
+
+# Step 2: Evaluate overall code maturity
+/code-maturity-assessor
+
+# Step 3: Prepare audit documentation package
+/audit-prep-assistant
+
+# Step 4: Share prepared package with auditors
+```
+
+### Platform-Specific Security Review
+
+For a Solana project:
+
+```bash
+# Scan for Solana-specific vulnerabilities
+/solana-vulnerability-scanner
+
+# Get implementation best practices
+/guidelines-advisor
+
+# Run comprehensive security validation
+/secure-workflow-guide
+```
+
+### Token Development
+
+```bash
+# Analyze token implementation and weird patterns
+/token-integration-analyzer
+
+# Get token-specific best practices
+/guidelines-advisor
+
+# Complete security validation
+/secure-workflow-guide
+```
+
+### Continuous Security Integration
+
+```bash
+# On every check-in
+/secure-workflow-guide
+
+# Weekly maturity assessment
+/code-maturity-assessor
+
+# Before major releases
+/audit-prep-assistant
+```
+
+## Tool Integration
+
+Many skills leverage security tools when available:
+
+- **Slither** - Static analysis for Solidity (70+ detectors, visual diagrams, upgradeability checks)
+- **Echidna** - Property-based fuzzing for Ethereum contracts
+- **Manticore** - Symbolic execution for deep analysis
+- **Tealer** - Static analyzer for TEAL/PyTeal (Algorand)
+- **Web3/Ethers** - On-chain queries for deployed contracts
+- **dylint** - Linter framework for Rust-based contracts
+- **golangci-lint** - Comprehensive linter for Go (Cosmos)
+
+<Note>
+Skills gracefully adapt when tools are unavailable, performing manual analysis instead. However, tool-assisted analysis is more thorough and faster.
+</Note>
+
+## Source Material
+
+This plugin is based on Trail of Bits' open-source security resources:
+
+- [Building Secure Contracts](https://github.com/crytic/building-secure-contracts) - Comprehensive security guidelines
+- [Not So Smart Contracts](https://github.com/crytic/not-so-smart-contracts) - Common vulnerability patterns
+- [Weird ERC20](https://github.com/d-xo/weird-erc20) - Non-standard token behaviors
+
+## Related Skills
+
+Complement this plugin with other Trail of Bits skills:
+
+- **audit-context-building** - Build deep architectural context before vulnerability hunting
+- **issue-writer** - Transform findings into professional audit reports
+- **solidity-poc-builder** - Build proof-of-concept exploits for Solidity vulnerabilities
+
+## Support
+
+For questions or issues:
+
+- [Trail of Bits Office Hours](https://meetings.hubspot.com/trailofbits/office-hours) - Every Tuesday
+- [Empire Hacking Slack](https://join.slack.com/t/empirehacking/shared_invite/zt-h97bbrj8-1jwuiU33nnzg67JcvIciUw) - #crytic and #ethereum channels
+
+## Author
+
+**Omar Inuwa** - Trail of Bits
+
+Version: 1.0.1

@@ -1,0 +1,625 @@
+---
+title: Reference Examples
+description: Real-world skill examples at different complexity levels
+---
+
+## Overview
+
+Learn by example! This guide showcases real skills from the Trail of Bits Skills Marketplace at different complexity levels.
+
+<Note>
+When in doubt, copy one of these reference skills and adapt it to your needs.
+</Note>
+
+## Complexity Levels
+
+| Complexity | Skill | What It Demonstrates |
+|------------|-------|---------------------|
+| **Basic** | [ask-questions-if-underspecified](https://github.com/trailofbits/skills/tree/main/plugins/ask-questions-if-underspecified) | Minimal frontmatter, simple guidance |
+| **Intermediate** | [constant-time-analysis](https://github.com/trailofbits/skills/tree/main/plugins/constant-time-analysis) | Python package, references/, language-specific docs |
+| **Advanced** | [culture-index](https://github.com/trailofbits/skills/tree/main/plugins/culture-index) | Scripts, workflows/, templates/, PDF extraction, multiple entry points |
+
+## Basic: ask-questions-if-underspecified
+
+A minimal skill that demonstrates clean structure and effective guidance.
+
+### Structure
+
+```
+ask-questions-if-underspecified/
+  .claude-plugin/
+    plugin.json
+  skills/
+    ask-questions-if-underspecified/
+      SKILL.md
+  README.md
+```
+
+### Frontmatter
+
+```yaml
+---
+name: ask-questions-if-underspecified
+description: Clarify requirements before implementing. Use when serious doubts arise.
+---
+```
+
+**Why it works:**
+- Clear, action-oriented name
+- Description includes trigger phrase ("when serious doubts arise")
+- No unnecessary complexity
+
+### Key Sections
+
+**When to Use:**
+```markdown
+## When to Use
+
+Use this skill when a request has multiple plausible interpretations or key 
+details (objective, scope, constraints, environment, or safety) are unclear.
+```
+
+**When NOT to Use:**
+```markdown
+## When NOT to Use
+
+Do not use this skill when the request is already clear, or when a quick, 
+low-risk discovery read can answer the missing details.
+```
+
+**Workflow:**
+```markdown
+## Workflow
+
+### 1) Decide whether the request is underspecified
+
+Treat a request as underspecified if after exploring how to perform the work:
+- Define the objective (what should change vs stay the same)
+- Define "done" (acceptance criteria, examples, edge cases)
+- Define scope (which files/components/users are in/out)
+
+### 2) Ask must-have questions first (keep it small)
+
+Ask 1-5 questions in the first pass. Prefer questions that eliminate whole 
+branches of work.
+```
+
+### What It Demonstrates
+
+- **Clear triggering**: Simple, specific use cases
+- **Actionable workflow**: Step-by-step guidance
+- **Minimal structure**: No unnecessary files or complexity
+- **Practical examples**: Question templates and anti-patterns
+
+[View full source](https://github.com/trailofbits/skills/blob/main/plugins/ask-questions-if-underspecified/skills/ask-questions-if-underspecified/SKILL.md)
+
+## Intermediate: constant-time-analysis
+
+A skill with Python tooling, multiple language support, and organized references.
+
+### Structure
+
+```
+constant-time-analysis/
+  .claude-plugin/
+    plugin.json
+  skills/
+    constant-time-analysis/
+      SKILL.md
+      references/
+        compiled.md        # C, C++, Go, Rust
+        javascript.md      # JavaScript, TypeScript
+        python.md          # Python
+        ruby.md            # Ruby
+        swift.md           # Swift
+        kotlin.md          # Kotlin
+        vm-compiled.md     # Java, C#
+        php.md             # PHP
+  ct_analyzer/
+    analyzer.py
+    script_analyzers.py
+    tests/
+      test_analyzer.py
+      test_samples/
+  commands/
+    ct-check.md
+  pyproject.toml
+  uv.lock
+  README.md
+```
+
+### Frontmatter
+
+```yaml
+---
+name: constant-time-analysis
+description: Detects timing side-channel vulnerabilities in cryptographic code. 
+  Use when implementing or reviewing crypto code, encountering division on 
+  secrets, secret-dependent branches, or constant-time programming questions 
+  in C, C++, Go, Rust, Swift, Java, Kotlin, C#, PHP, JavaScript, TypeScript, 
+  Python, or Ruby.
+---
+```
+
+**Why it works:**
+- Specific vulnerability type ("timing side-channel")
+- Multiple trigger keywords ("crypto code", "constant-time", "division on secrets")
+- Lists all supported languages
+
+### Progressive Disclosure
+
+**SKILL.md (Overview):**
+```markdown
+## Language Selection
+
+Based on the file extension or language context, refer to the appropriate guide:
+
+| Language   | File Extensions | Guide |
+|------------|----------------|-------|
+| C, C++     | `.c`, `.cpp`   | [references/compiled.md](references/compiled.md) |
+| Python     | `.py`          | [references/python.md](references/python.md) |
+| JavaScript | `.js`, `.ts`   | [references/javascript.md](references/javascript.md) |
+```
+
+**references/compiled.md (Details):**
+```markdown
+# Constant-Time Analysis for Compiled Languages
+
+## Detection Strategy
+
+For compiled languages (C, C++, Go, Rust), timing leaks can occur at:
+
+1. **Source level**: Secret-dependent branches, variable-time operations
+2. **Compiler level**: Optimizations that introduce timing variations
+3. **Hardware level**: CPU instructions with variable timing
+
+## Analysis Process
+
+### Step 1: Source Analysis
+[Detailed source-level checks]
+
+### Step 2: Assembly Inspection
+[How to check generated assembly]
+
+### Step 3: Testing
+[Cross-architecture testing procedures]
+```
+
+### Python Script Integration
+
+**PEP 723 Metadata:**
+```python
+#!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "tree-sitter>=0.20.0",
+#     "tree-sitter-c>=0.20.0",
+#     "tree-sitter-cpp>=0.20.0",
+# ]
+# ///
+```
+
+**Usage in SKILL.md:**
+```markdown
+## Quick Start
+
+\`\`\`bash
+# Analyze any supported file type
+uv run {baseDir}/ct_analyzer/analyzer.py <source_file>
+
+# Include conditional branch warnings
+uv run {baseDir}/ct_analyzer/analyzer.py --warnings <source_file>
+\`\`\`
+```
+
+### What It Demonstrates
+
+- **Language-specific guidance**: References for each supported language
+- **Progressive disclosure**: Overview in SKILL.md, details in references/
+- **Tooling integration**: Python scripts with PEP 723 metadata
+- **Testing**: Includes test suite with sample files
+- **Commands**: Custom slash command for quick checks
+
+[View full source](https://github.com/trailofbits/skills/tree/main/plugins/constant-time-analysis)
+
+## Advanced: culture-index
+
+A comprehensive skill with PDF extraction, templates, and multiple workflows.
+
+### Structure
+
+```
+culture-index/
+  .claude-plugin/
+    plugin.json
+  skills/
+    interpreting-culture-index/
+      SKILL.md
+      workflows/
+        individual-analysis.md
+        team-analysis.md
+        burnout-detection.md
+      templates/
+        individual-report.md
+        team-report.md
+      references/
+        trait-definitions.md
+        archetypes.md
+  scripts/
+    extract_pdf.py         # OpenCV-based PDF extraction
+    pyproject.toml
+  README.md
+```
+
+### Frontmatter
+
+```yaml
+---
+name: interpreting-culture-index
+description: Interprets Culture Index (CI) surveys, behavioral profiles, and 
+  personality assessment data. Supports individual profile interpretation, team 
+  composition analysis (gas/brake/glue), burnout detection, profile comparison, 
+  hiring profiles, manager coaching, interview transcript analysis for trait 
+  prediction, candidate debrief, onboarding planning, and conflict mediation. 
+  Accepts extracted JSON or PDF input via OpenCV extraction script.
+allowed-tools:
+  - Bash
+  - Read
+  - Grep
+  - Glob
+  - Write
+---
+```
+
+**Why it works:**
+- Comprehensive feature list in description
+- Specific use cases as triggers
+- Restricts to needed tools only
+- Mentions input formats (JSON, PDF)
+
+### Multiple Entry Points
+
+**Essential Principles (Core Guidance):**
+```markdown
+<essential_principles>
+
+**Culture Index measures behavioral traits, not intelligence or skills. 
+There is no "good" or "bad" profile.**
+
+<principle name="never-compare-absolutes">
+**Never compare absolute trait values between people.**
+
+The 0-10 scale is just a ruler. What matters is **distance from the red arrow** 
+(population mean at 50th percentile).
+
+**Wrong**: "Dan has higher autonomy than Jim because his A is 8 vs 5"
+**Right**: "Dan is +3 centiles from his arrow; Jim is +1 from his arrow"
+</principle>
+
+</essential_principles>
+```
+
+**Input Formats:**
+```markdown
+<input_formats>
+
+**JSON (Use if available)**
+If JSON data is already extracted, use it directly.
+
+**PDF (Extract first)**
+If only PDF is available:
+\`\`\`bash
+uv run {baseDir}/scripts/extract_pdf.py survey.pdf > person_name.json
+\`\`\`
+
+</input_formats>
+```
+
+### Workflow Organization
+
+**workflows/individual-analysis.md:**
+```markdown
+# Individual Profile Analysis Workflow
+
+## Step 1: Extract or Load Data
+
+If PDF: `uv run {baseDir}/scripts/extract_pdf.py survey.pdf > data.json`
+If JSON: Load directly
+
+## Step 2: Interpret Survey Traits
+
+For each trait (A, B, C, D):
+1. Locate the red arrow (population mean)
+2. Measure distance in centiles
+3. Interpret based on distance table
+
+## Step 3: Compare Survey vs Job
+
+Large gaps indicate behavior modification:
+- Energy drain
+- Burnout risk
+- Unsustainable long-term
+```
+
+**workflows/team-analysis.md:**
+```markdown
+# Team Composition Analysis Workflow
+
+## Gas/Brake/Glue Framework
+
+**Gas (Drive, Action):**
+- High D (Dominance): Takes charge, drives decisions
+- High B (Extroversion): Energizes team, generates momentum
+
+**Brake (Caution, Analysis):**
+- High C (Patience): Ensures thorough consideration
+- High L (Logic): Demands evidence and rigor
+
+**Glue (Connection, Cohesion):**
+- Low D + High B: People-focused connectors
+- High I (Ingenuity): Creative problem-solvers
+```
+
+### Template Integration
+
+**templates/individual-report.md:**
+```markdown
+# Culture Index Profile: {NAME}
+
+## Archetype: {ARCHETYPE}
+
+## Survey Traits (Who You Are)
+
+| Trait | Position | Distance | Interpretation |
+|-------|----------|----------|----------------|
+| A (Autonomy) | {A_POS} | {A_DIST} | {A_INTERP} |
+| B (Extroversion) | {B_POS} | {B_DIST} | {B_INTERP} |
+
+## Burnout Risk
+
+{BURNOUT_ASSESSMENT}
+
+## Recommendations
+
+{RECOMMENDATIONS}
+```
+
+### Script with System Dependencies
+
+**extract_pdf.py:**
+```python
+#!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "opencv-python>=4.8.0",
+#     "numpy>=1.24.0",
+#     "pillow>=10.0.0",
+# ]
+# ///
+
+"""
+Extract Culture Index survey data from PDF using OpenCV.
+
+System dependencies:
+- poppler-utils (for pdf2image)
+- tesseract-ocr (for OCR if needed)
+
+Install on macOS: brew install poppler tesseract
+Install on Ubuntu: apt-get install poppler-utils tesseract-ocr
+"""
+
+import cv2
+import json
+import sys
+from pathlib import Path
+
+# Extraction logic...
+```
+
+**Documentation in workflow:**
+```markdown
+## Prerequisites
+
+Install system dependencies:
+
+**macOS:**
+\`\`\`bash
+brew install poppler tesseract
+\`\`\`
+
+**Ubuntu/Debian:**
+\`\`\`bash
+apt-get install poppler-utils tesseract-ocr
+\`\`\`
+```
+
+### What It Demonstrates
+
+- **Complex data processing**: PDF extraction with OpenCV
+- **Multiple workflows**: Different processes for different use cases
+- **Template system**: Structured output formats
+- **System dependencies**: Documented platform-specific requirements
+- **Tool restrictions**: `allowed-tools` limits what Claude can use
+- **Structured guidance**: XML-like tags for essential principles
+
+[View full source](https://github.com/trailofbits/skills/tree/main/plugins/culture-index)
+
+## Additional Production Examples
+
+### superpowers
+
+Advanced workflow patterns and TDD enforcement:
+
+```yaml
+---
+name: test-driven-development
+description: Enforces test-first development workflow. Use when implementing 
+  new features or fixing bugs in projects with test suites.
+---
+
+## Workflow
+
+### 1) Write test first
+Write a failing test that specifies the desired behavior.
+
+### 2) Run test (must fail)
+Confirm the test fails for the right reason.
+
+### 3) Implement minimum code
+Write the simplest code to make the test pass.
+
+### 4) Run test (must pass)
+Confirm the test now passes.
+
+### 5) Refactor
+Improve code while keeping tests green.
+```
+
+**Key techniques:**
+- Mandatory workflow enforcement
+- Gate reviews (must see failure before implementation)
+- Multi-skill orchestration
+
+[View source](https://github.com/obra/superpowers)
+
+### getsentry/skills - security-review
+
+Production Sentry skill with excellent routing and progressive disclosure:
+
+```yaml
+---
+name: security-review
+description: Security review checklist for code changes. Use when reviewing PRs, 
+  analyzing diffs, or auditing new features for security implications.
+---
+
+## Review Scope
+
+Based on the type of change, use the appropriate checklist:
+
+| Change Type | Checklist |
+|------------|-----------|
+| Authentication | [references/auth-review.md](references/auth-review.md) |
+| API endpoints | [references/api-review.md](references/api-review.md) |
+| Database queries | [references/sql-review.md](references/sql-review.md) |
+| File operations | [references/file-review.md](references/file-review.md) |
+```
+
+**Key techniques:**
+- Smart routing to specialized sub-guides
+- Checklist-based workflows
+- Production-tested patterns
+
+[View source](https://github.com/getsentry/skills)
+
+## Learning Path
+
+<Steps>
+  <Step title="Start with Basic">
+    Copy `ask-questions-if-underspecified` for simple behavioral guidance
+  </Step>
+
+  <Step title="Add Tooling">
+    Study `constant-time-analysis` for Python integration and references
+  </Step>
+
+  <Step title="Advanced Features">
+    Review `culture-index` for complex workflows and templates
+  </Step>
+
+  <Step title="Production Patterns">
+    Explore `superpowers` and `getsentry/skills` for advanced techniques
+  </Step>
+</Steps>
+
+## Common Patterns
+
+### Pattern: Language Routing
+
+Route to language-specific guides:
+
+```markdown
+## Language Selection
+
+| Language | Extensions | Guide |
+|----------|-----------|-------|
+| Python   | `.py`     | [references/python.md](references/python.md) |
+| JavaScript | `.js`   | [references/javascript.md](references/javascript.md) |
+```
+
+**Used by:** constant-time-analysis, variant-analysis
+
+### Pattern: Workflow Checklists
+
+Enforce step-by-step processes:
+
+```markdown
+## Audit Workflow
+
+You MUST complete all steps in order:
+
+### 1) Initial Scan
+- [ ] Run static analysis
+- [ ] Review findings
+- [ ] Document scan results
+
+### 2) Manual Review
+- [ ] Verify each finding
+- [ ] Assess severity
+- [ ] Document exploit scenarios
+```
+
+**Used by:** fp-check, differential-review, audit-context-building
+
+### Pattern: Progressive Disclosure
+
+Quick start in SKILL.md, details in references:
+
+```markdown
+## Quick Start
+[Essential guidance]
+
+## Advanced Topics
+See [ADVANCED.md](references/ADVANCED.md) for:
+- Topic A
+- Topic B
+- Topic C
+```
+
+**Used by:** constant-time-analysis, static-analysis, building-secure-contracts
+
+### Pattern: Template-Based Output
+
+Provide structured templates:
+
+```markdown
+## Generating Reports
+
+Use this template: [templates/report.md](templates/report.md)
+
+Fill in:
+- {SUMMARY}: Brief overview
+- {FINDINGS}: Detailed findings
+- {RECOMMENDATIONS}: Action items
+```
+
+**Used by:** culture-index, audit-context-building
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Skill Authoring" icon="book" href="/contributing/skill-authoring">
+    Write your own skill
+  </Card>
+  <Card title="Best Practices" icon="star" href="/contributing/best-practices">
+    Follow quality standards
+  </Card>
+  <Card title="Plugin Structure" icon="folder-tree" href="/contributing/plugin-structure">
+    Understand required structure
+  </Card>
+  <Card title="Getting Started" icon="rocket" href="/contributing/getting-started">
+    Start contributing
+  </Card>
+</CardGroup>

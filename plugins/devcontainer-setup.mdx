@@ -1,0 +1,335 @@
+---
+title: Devcontainer Setup
+description: Create pre-configured devcontainers with Claude Code and language-specific tooling
+icon: container-storage
+---
+
+<Info>
+Generate production-ready devcontainer configurations with Claude Code, modern dev tools, and persistent volumes. Supports Python, Node/TypeScript, Rust, and Go.
+</Info>
+
+## Overview
+
+The Devcontainer Setup skill creates isolated development environments with Claude Code pre-installed, language-specific tooling, modern CLI utilities, and persistent session data. Perfect for sandboxed development, team onboarding, or reproducible builds.
+
+**Author:** Alexis Challande
+
+## Features
+
+<CardGroup cols={2}>
+  <Card title="Claude Code Pre-installed" icon="robot">
+    Includes Claude Code with `bypassPermissions` configured and marketplace plugins auto-loaded
+  </Card>
+  
+  <Card title="Multi-Language Support" icon="code">
+    Detects and configures Python 3.13, Node 22, Rust, and Go automatically
+  </Card>
+  
+  <Card title="Modern CLI Tools" icon="terminal">
+    Includes ripgrep, fd, fzf, tmux, git-delta, ast-grep for enhanced development
+  </Card>
+  
+  <Card title="Session Persistence" icon="database">
+    Command history, GitHub CLI auth, and Claude config survive container rebuilds
+  </Card>
+</CardGroup>
+
+## Supported Languages
+
+| Language | Detection | Configuration |
+|----------|-----------|---------------|
+| **Python** | `pyproject.toml`, `*.py` | Python 3.13 via uv (fast binary install) |
+| **Node/TypeScript** | `package.json`, `tsconfig.json` | Node 22 via fnm |
+| **Rust** | `Cargo.toml` | Devcontainer feature |
+| **Go** | `go.mod` | Devcontainer feature |
+
+<Note>
+Multi-language projects automatically get all detected configurations merged.
+</Note>
+
+## Generated Files
+
+| File | Purpose |
+|------|---------||
+| `Dockerfile` | Container build instructions with Claude Code and dev tools |
+| `devcontainer.json` | VS Code/devcontainer configuration |
+| `post_install.py` | Post-creation setup (permissions, tmux, git config) |
+| `.zshrc` | Shell configuration with history persistence |
+| `install.sh` | CLI helper (`devc` command) for managing containers |
+
+## Installation
+
+```bash
+/plugin install trailofbits/skills/plugins/devcontainer-setup
+```
+
+## Usage
+
+<Steps>
+  <Step title="Request Devcontainer">
+    Tell Claude to set up a devcontainer:
+    
+    ```text
+    Set up a devcontainer for this project
+    ```
+    
+    or
+    
+    ```text
+    Add devcontainer support with Python and Node
+    ```
+  </Step>
+  
+  <Step title="Automatic Detection">
+    Claude detects your project's language stack by scanning for:
+    - `pyproject.toml`, `*.py` → Python
+    - `package.json`, `tsconfig.json` → Node/TypeScript
+    - `Cargo.toml` → Rust
+    - `go.mod` → Go
+  </Step>
+  
+  <Step title="Configuration Generated">
+    Claude writes 5 files to `.devcontainer/`:
+    - Dockerfile with language runtimes
+    - devcontainer.json with VS Code settings
+    - post_install.py for setup automation
+    - .zshrc for shell configuration
+    - install.sh for CLI helper commands
+  </Step>
+  
+  <Step title="Start Container">
+    Open in VS Code and select "Reopen in Container", or use:
+    
+    ```bash
+    devcontainer up --workspace-folder .
+    ```
+  </Step>
+</Steps>
+
+## CLI Helper Commands
+
+After generating, run `.devcontainer/install.sh self-install` to add the `devc` command:
+
+```bash
+# Install template + start container in current directory
+devc .
+
+# Start the devcontainer
+devc up
+
+# Rebuild container (preserves persistent volumes)
+devc rebuild
+
+# Stop the container
+devc down
+
+# Open zsh shell in container
+devc shell
+```
+
+## Language-Specific Configuration
+
+### Python Projects
+
+**Detected from:** `pyproject.toml`, `requirements.txt`, `*.py`
+
+**Includes:**
+- Python 3.13 via uv (fast binary install, not source compilation)
+- VS Code extensions: python, pylance, ruff
+- Auto-configured interpreter path: `.venv/bin/python`
+- Ruff formatting on save
+
+**Post-create command:**
+```bash
+rm -rf .venv && uv sync && uv run /opt/post_install.py
+```
+
+### Node/TypeScript Projects
+
+**Detected from:** `package.json`, `tsconfig.json`
+
+**Includes:**
+- Node 22 via fnm (Fast Node Manager)
+- VS Code extensions: eslint, prettier
+- Auto-detect package manager from lockfile (pnpm, yarn, npm)
+- Prettier formatting on save
+
+**Post-create command:**
+```bash
+# Detects lockfile automatically:
+uv run /opt/post_install.py && npm ci          # package-lock.json
+uv run /opt/post_install.py && pnpm install --frozen-lockfile  # pnpm-lock.yaml
+uv run /opt/post_install.py && yarn install --frozen-lockfile  # yarn.lock
+```
+
+### Rust Projects
+
+**Detected from:** `Cargo.toml`
+
+**Includes:**
+- Rust via devcontainer feature
+- VS Code extensions: rust-analyzer, even-better-toml
+- Locked builds when `Cargo.lock` exists
+
+**Post-create command:**
+```bash
+uv run /opt/post_install.py && cargo build --locked
+```
+
+### Go Projects
+
+**Detected from:** `go.mod`
+
+**Includes:**
+- Go latest via devcontainer feature
+- VS Code extension: golang.go
+- Language server enabled
+
+**Post-create command:**
+```bash
+uv run /opt/post_install.py && go mod download
+```
+
+## Security Model
+
+The devcontainer provides **filesystem isolation** with **network isolation** capabilities:
+
+<Accordion title="Filesystem Isolation">
+- Container filesystem is isolated from host
+- Your `~/.gitconfig` is mounted read-only
+- Persistent volumes preserve auth across rebuilds
+- No access to host files outside project directory
+</Accordion>
+
+<Accordion title="Network Isolation">
+- iptables/ipset with NET_ADMIN/NET_RAW capabilities
+- Restrict outbound traffic by domain/IP
+- NPM security: scripts disabled, 24-hour package release delay
+</Accordion>
+
+<Accordion title="Session Persistence">
+These survive container rebuilds:
+- Command history (zsh)
+- GitHub CLI authentication
+- Claude Code configuration
+- SSH keys (via persistent volume)
+</Accordion>
+
+## Advanced Usage
+
+### Adding Persistent Volumes
+
+Pattern for new mounts in `devcontainer.json`:
+
+```json
+"mounts": [
+  "source=myproject-cargo-${devcontainerId},target=/home/vscode/.cargo,type=volume",
+  "source=myproject-go-${devcontainerId},target=/home/vscode/go,type=volume"
+]
+```
+
+Common persistent directories:
+- `/home/vscode/.cargo` (Rust dependencies)
+- `/home/vscode/go` (Go modules)
+- `/home/vscode/.npm` (NPM cache)
+- `/home/vscode/.cache` (General cache)
+
+### Multi-Language Projects
+
+For projects using multiple languages (e.g., Python + Node):
+
+1. All detected languages are configured automatically
+2. Extensions from all languages are merged
+3. Post-create commands are chained:
+
+```bash
+uv run /opt/post_install.py && uv sync && npm ci
+```
+
+### Tailscale Integration
+
+For secure networking between devcontainers:
+
+```json
+"features": {
+  "ghcr.io/devcontainers/features/tailscale:1": {}
+}
+```
+
+Configure Tailscale auth key as a devcontainer secret.
+
+## Reference Material
+
+The skill includes detailed reference documentation:
+
+- **dockerfile-best-practices.md** - Layer optimization, multi-stage builds, architecture support
+- **features-vs-dockerfile.md** - When to use devcontainer features vs custom Dockerfile
+
+## Validation Checklist
+
+Before starting the container, verify:
+
+<Checklist>
+  - [ ] All `{{PROJECT_NAME}}` placeholders replaced with human-readable name
+  - [ ] All `{{PROJECT_SLUG}}` placeholders replaced with slugified name
+  - [ ] JSON syntax is valid in `devcontainer.json` (no trailing commas)
+  - [ ] Language-specific extensions added for all detected languages
+  - [ ] `postCreateCommand` includes all required setup commands (chained with `&&`)
+</Checklist>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Container won't start">
+    Check Docker is running:
+    ```bash
+    docker ps
+    ```
+    
+    Rebuild container:
+    ```bash
+    devc rebuild
+    ```
+  </Accordion>
+  
+  <Accordion title="Permission errors">
+    The `post_install.py` script handles permissions. If issues persist:
+    
+    ```bash
+    # Inside container
+    sudo chown -R vscode:vscode /home/vscode
+    ```
+  </Accordion>
+  
+  <Accordion title="Dependencies not installing">
+    Check the post-create command ran successfully:
+    
+    ```bash
+    # View container logs
+    docker logs <container-id>
+    ```
+    
+    Manually run setup:
+    ```bash
+    devc shell
+    uv sync  # Python
+    npm ci   # Node
+    ```
+  </Accordion>
+  
+  <Accordion title="Lost configuration after rebuild">
+    Ensure persistent volumes are configured in `devcontainer.json`:
+    
+    ```json
+    "mounts": [
+      "source=myproject-data-${devcontainerId},target=/home/vscode/.local,type=volume"
+    ]
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Related Skills
+
+- **Modern Python** - Python tooling configured in devcontainers (uv, ruff, pytest)
+- **GH CLI** - GitHub CLI comes pre-installed and authenticated
+- **Ask Questions If Underspecified** - Used when project language is ambiguous

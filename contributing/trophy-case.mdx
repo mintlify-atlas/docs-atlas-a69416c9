@@ -1,0 +1,202 @@
+---
+title: Trophy Case
+description: Bugs discovered using Trail of Bits Skills
+---
+
+## Overview
+
+This page showcases real-world security vulnerabilities and bugs discovered using skills from the Trail of Bits Skills Marketplace.
+
+<Note>
+Found a bug using Trail of Bits Skills? [Let us know!](https://github.com/trailofbits/skills/issues/new?template=trophy-case.yml)
+</Note>
+
+## Recognition
+
+When reporting bugs you've found, feel free to mention:
+
+> Found using [Trail of Bits Skills](https://github.com/trailofbits/skills)
+
+This helps spread awareness of AI-assisted security analysis tools and techniques.
+
+## Verified Findings
+
+| Skill | Bug | Description |
+|-------|-----|-------------|
+| constant-time-analysis | [Timing side-channel in ML-DSA signing](https://github.com/RustCrypto/signatures/pull/1144) | Variable-time division operation in ML-DSA (FIPS 204) digital signature implementation leaked secret key information through execution timing. |
+
+## Why This Matters
+
+Each entry in the trophy case represents:
+
+1. **Real impact**: Actual vulnerabilities in production or widely-used code
+2. **AI assistance**: Bugs found with help from Claude Code skills
+3. **Validation**: Skills that demonstrably improve security analysis
+
+## Contributing Your Findings
+
+Found a bug using Trail of Bits Skills? Here's how to add it to the trophy case:
+
+<Steps>
+  <Step title="Document the finding">
+    Prepare:
+    - Link to the bug report, pull request, or CVE
+    - Which skill helped you find it
+    - Brief description of the vulnerability
+  </Step>
+
+  <Step title="Submit via GitHub issue">
+    [Create a new trophy case issue](https://github.com/trailofbits/skills/issues/new?template=trophy-case.yml) with your finding.
+  </Step>
+
+  <Step title="Attribution">
+    Feel free to mention Trail of Bits Skills in your bug report to help others discover these tools.
+  </Step>
+</Steps>
+
+## Skill Effectiveness
+
+### constant-time-analysis
+
+**Focus**: Timing side-channel vulnerabilities in cryptographic code
+
+**Verified findings**: 1+
+
+**Impact areas**:
+- Post-quantum cryptography implementations (ML-DSA/Dilithium)
+- Digital signature schemes
+- Secret-dependent timing leaks
+
+**Example finding**: Variable-time division on secret data in RustCrypto's ML-DSA implementation. The skill detected division operations on secret values that could leak key information through CPU timing variations.
+
+## Types of Bugs We Track
+
+We're interested in documenting:
+
+### Security Vulnerabilities
+
+- Memory safety issues
+- Timing side-channels
+- Cryptographic weaknesses
+- Authentication bypasses
+- Input validation failures
+- Injection vulnerabilities
+
+### Correctness Issues
+
+- Spec compliance violations
+- Logic errors
+- Edge case handling
+- Resource leaks
+
+### Code Quality
+
+- Performance issues
+- Anti-patterns
+- Maintainability problems
+- Test coverage gaps
+
+## Impact Metrics
+
+<Note>
+This section will grow as more findings are reported. Each skill's effectiveness will be tracked and documented.
+</Note>
+
+**Current stats:**
+- Total verified bugs: 1
+- Skills with findings: 1
+- Projects impacted: 1
+
+## How Skills Find Bugs
+
+Different skills use different approaches:
+
+### Static Analysis
+
+Skills like `constant-time-analysis` and `static-analysis` detect patterns in source code:
+
+```python
+# Detected by constant-time-analysis
+def sign(secret_key, message):
+    k = secret_key % some_value  # ⚠️ Variable-time division on secret
+    # ...
+```
+
+The skill recognizes that modulo operations on secrets are variable-time on most CPUs.
+
+### Workflow Enforcement
+
+Skills like `fp-check` and `differential-review` enforce rigorous review processes:
+
+```markdown
+## Mandatory Steps
+
+- [ ] Verify it's a real issue (not false positive)
+- [ ] Assess severity
+- [ ] Document exploit scenario
+- [ ] Write proof-of-concept
+```
+
+This systematic approach catches issues that might be missed in ad-hoc reviews.
+
+### Pattern Recognition
+
+Skills like `variant-analysis` and `insecure-defaults` find similar issues across codebases:
+
+```markdown
+Found one reentrancy bug? Search for the pattern:
+1. External call
+2. State update after call
+3. No reentrancy guard
+```
+
+## Research Applications
+
+These findings also demonstrate:
+
+1. **AI-assisted security analysis** - How LLMs can augment human security researchers
+2. **Knowledge transfer** - Encoding expert knowledge in reusable skills
+3. **Systematic coverage** - Skills ensure comprehensive analysis
+
+## Future Growth
+
+As the marketplace grows, we expect to see:
+
+- More skills finding bugs in their domains
+- Cross-skill collaboration (multiple skills on one finding)
+- Emerging patterns in what AI finds vs. what humans find
+- Better understanding of skill effectiveness
+
+## Get Involved
+
+Help grow the trophy case:
+
+<CardGroup cols={2}>
+  <Card title="Report a Finding" icon="trophy" href="https://github.com/trailofbits/skills/issues/new?template=trophy-case.yml">
+    Share bugs you've found
+  </Card>
+  <Card title="Create a Skill" icon="code" href="/contributing/getting-started">
+    Build skills for your domain
+  </Card>
+  <Card title="Browse Skills" icon="grid" href="/plugins">
+    Find skills to use
+  </Card>
+  <Card title="Contribute" icon="github" href="https://github.com/trailofbits/skills">
+    Improve existing skills
+  </Card>
+</CardGroup>
+
+## Acknowledgments
+
+Thank you to all contributors who:
+
+- Create and maintain skills
+- Report findings to the trophy case
+- Fix bugs discovered by these tools
+- Share knowledge and improve security
+
+Every bug found represents:
+- Safer software for users
+- Validation of AI-assisted analysis
+- Knowledge encoded for future use
+- Community collaboration at work

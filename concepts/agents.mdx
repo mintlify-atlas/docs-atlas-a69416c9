@@ -1,0 +1,559 @@
+---
+title: "Agents"
+description: "Autonomous agents for complex multi-step workflows"
+---
+
+## What are Agents?
+
+Agents are autonomous sub-agents that handle complex, multi-step tasks with specialized instructions. Unlike skills (which provide guidance), agents take full control and execute workflows independently.
+
+<Note>
+Agents are Claude instances with constrained instructions and tool access. They operate independently within their defined scope and return results to the main conversation.
+</Note>
+
+## When to Use Agents
+
+Use agents for:
+
+- **Complex multi-step workflows** - Tasks requiring 10+ coordinated steps
+- **Specialized analysis** - Deep dives requiring domain expertise (security audits, compliance checks)
+- **Isolated context** - Tasks that need clean context without main conversation history
+- **Quality gates** - Workflows requiring validation and verification loops
+- **Parallel work** - Multiple independent analyses that can run simultaneously
+
+**Don't use agents for:**
+- Simple single-step tasks (use skills instead)
+- Tasks requiring user interaction (agents run autonomously)
+- Quick lookups or searches (use tools directly)
+
+## Agent Structure
+
+Agents are markdown files in the `agents/` directory with YAML frontmatter:
+
+```
+plugins/my-plugin/
+  agents/
+    agent-name.md         # Agent implementation
+    another-agent.md      # Additional agents
+```
+
+## Frontmatter Format
+
+```yaml agent-name.md
+---
+name: agent-name
+description: "Third-person description of what the agent does and when to use it"
+tools: Read, Grep, Glob, Bash
+---
+```
+
+### Frontmatter Fields
+
+<ParamField path="name" type="string" required>
+  Agent name in kebab-case. Must be unique within the plugin.
+</ParamField>
+
+<ParamField path="description" type="string" required>
+  Third-person description of the agent's purpose and when to invoke it.
+  
+  Be specific about the agent's specialized role.
+</ParamField>
+
+<ParamField path="tools" type="string" required>
+  Comma-separated list of allowed tools (no YAML array, just comma-separated string).
+  
+  **Example:** `Read, Grep, Glob, Bash, Write`
+</ParamField>
+
+## Agent Body Structure
+
+The markdown body contains the agent's complete instructions:
+
+```markdown agent-name.md
+---
+name: function-analyzer
+description: "Performs ultra-granular per-function deep analysis for security audit context building"
+tools: Read, Grep, Glob
+---
+
+# Function Analyzer Agent
+
+You are a specialized code analysis agent that performs ultra-granular,
+per-function deep analysis to build security audit context. Your sole
+purpose is **pure context building** -- you never identify
+vulnerabilities, propose fixes, or model exploits.
+
+## Core Constraint
+
+You produce **understanding, not conclusions**. Your output feeds into
+later vulnerability-hunting phases. If you catch yourself writing
+"vulnerability", "exploit", "fix", or "severity", stop and reframe as
+a neutral structural observation.
+
+## What You Analyze
+
+- Dense functions with complex control flow or branching
+- Data-flow chains spanning multiple functions or modules
+- Cryptographic or mathematical implementations
+- State machines and lifecycle transitions
+
+## When NOT to Use
+
+- Vulnerability identification or exploit modeling
+- High-level architecture overviews
+- Simple getter/setter functions
+- Tasks requiring code modification (this agent is read-only)
+
+## Workflow
+
+[Detailed step-by-step instructions...]
+
+## Quality Thresholds
+
+Before returning your analysis, verify:
+- At least 3 invariants identified per function
+- At least 5 assumptions documented per function
+- Every claim cites specific line numbers
+- No vague language - use "unclear; need to inspect X" when uncertain
+
+## Output Format
+
+Structure your response as a markdown document with these sections:
+[Template for output...]
+```
+
+## Agent Design Patterns
+
+### Read-Only Analysis Agent
+
+For agents that only read and analyze code:
+
+```yaml
+---
+name: data-flow-analyzer
+description: "Traces data flow through functions to identify information flow paths"
+tools: Read, Grep, Glob
+---
+
+# Data Flow Analyzer
+
+You are a read-only analysis agent. You NEVER:
+- Modify code
+- Suggest fixes
+- Write files
+
+You ALWAYS:
+- Cite specific line numbers
+- Document assumptions explicitly
+- Mark unknowns with "unclear; need to inspect X"
+```
+
+### Builder Agent
+
+For agents that create or modify artifacts:
+
+```yaml
+---
+name: poc-builder
+description: "Builds proof-of-concept exploits to verify vulnerability findings"
+tools: Read, Grep, Glob, Write, Bash
+---
+
+# PoC Builder Agent
+
+You build minimal proof-of-concept code to verify security findings.
+
+## Build Process
+
+1. Read the vulnerability description
+2. Identify the minimal reproduction case
+3. Write clean, commented PoC code
+4. Test the PoC
+5. Document expected vs actual behavior
+```
+
+### Validator Agent
+
+For agents that verify work from other agents:
+
+```yaml
+---
+name: poc-verifier
+description: "Verifies that proof-of-concept exploits correctly demonstrate vulnerabilities"
+tools: Read, Bash
+---
+
+# PoC Verifier Agent
+
+You verify PoC correctness by:
+
+1. Running the PoC in a safe environment
+2. Checking if it demonstrates the claimed issue
+3. Validating the explanation matches the behavior
+4. Reporting pass/fail with evidence
+```
+
+## Real Examples
+
+<AccordionGroup>
+  <Accordion title="function-analyzer (Read-Only Deep Analysis)">
+    Performs ultra-granular per-function analysis for security audit context. Produces understanding, not conclusions.
+
+    **Per-Function Checklist:**
+    - Purpose and role
+    - Inputs and assumptions (minimum 5)
+    - Outputs and effects (minimum 3)
+    - Block-by-block analysis
+    - Cross-function dependencies (minimum 3 relationships)
+
+    **Quality Thresholds:** Minimum 3 invariants and 5 assumptions per function, all claims cite line numbers.
+  </Accordion>
+</AccordionGroup>
+
+<AccordionGroup>
+  <Accordion title="semgrep-scanner (Tool Integration)">
+    Runs Semgrep static analysis with appropriate rules for the target codebase.
+
+    **Workflow:**
+    1. Detect languages in the codebase
+    2. Select appropriate Semgrep rules (p/security-audit, p/owasp-top-ten, etc.)
+    3. Run Semgrep and capture results
+    4. Process results - parse SARIF, group by severity, filter false positives
+    5. Generate report with statistics and high-priority findings
+  </Accordion>
+</AccordionGroup>
+
+<AccordionGroup>
+  <Accordion title="spec-compliance-checker (Multi-Phase Workflow)">
+    Verifies code compliance against formal specifications through a 7-phase workflow.
+    
+    You verify that code implementation matches formal specifications.
+    
+    ## Phase 1: Specification Analysis
+    
+    1. Read the formal specification document
+    2. Extract requirements into structured format
+    3. Identify testable assertions
+    4. Categorize by priority (MUST, SHOULD, MAY)
+    
+    ## Phase 2: Code Analysis
+    
+    1. Map specification requirements to code sections
+    2. For each requirement:
+       - Find implementing code
+       - Verify correctness
+       - Check edge cases
+       - Document gaps
+    
+    ## Phase 3: Compliance Report
+    
+    Generate report with:
+    - Compliance matrix (requirement → implementation → status)
+    - Non-compliant items with severity
+    - Missing implementations
+    - Partial implementations needing review
+    - Recommendations
+    
+    **Output:** Compliance matrix showing requirement status, non-compliant items with severity, and recommendations.
+  </Accordion>
+
+  <Accordion title="differential-reviewer (Git Integration)">
+    Performs security-focused review of git diffs between branches.
+
+    **Workflow:**
+    1. Analyze the diff using git
+    2. Categorize changes (authentication, crypto, input validation, network, data storage)
+    3. For each security-relevant change: identify what changed, why it's security-relevant, risks, and testing needs
+    4. Generate prioritized review report
+
+    **Focus:** New attack surface, removed security checks, authentication changes, crypto modifications, database query changes.
+  </Accordion>
+</AccordionGroup>
+
+## Agent Constraints
+
+Define clear boundaries for what the agent can and cannot do:
+
+### What Agents Should Do
+
+```markdown
+You ALWAYS:
+- Cite specific line numbers for claims
+- Document assumptions explicitly
+- Mark unknowns with "unclear; need to inspect X"
+- Follow the defined workflow steps
+- Validate inputs before processing
+```
+
+### What Agents Should NOT Do
+
+```markdown
+You NEVER:
+- Make assumptions without stating them
+- Skip workflow steps
+- Produce generic advice
+- Use vague language like "probably" or "might"
+- Modify code (for read-only agents)
+```
+
+## Quality Gates
+
+Build verification into agent workflows:
+
+```markdown
+## Quality Checklist
+
+Before returning results, verify:
+- [ ] All required sections completed
+- [ ] All claims cite specific line numbers
+- [ ] All assumptions documented
+- [ ] All unknowns marked explicitly
+- [ ] Minimum thresholds met:
+  - At least 3 invariants identified
+  - At least 5 assumptions documented
+  - At least 3 dependencies traced
+
+If any checklist item fails, continue analysis until all pass.
+```
+
+## Output Formats
+
+Specify exact output structure:
+
+<Tabs>
+  <Tab title="Structured Markdown">
+    ```markdown
+    ## Output Format
+    
+    Return a markdown document with these sections:
+    
+    ```markdown
+    # Analysis Results
+    
+    ## Summary
+    [2-3 sentence overview]
+    
+    ## Findings
+    [Detailed findings with line numbers]
+    
+    ## Assumptions
+    [List all assumptions made]
+    
+    ## Open Questions
+    [Items requiring manual review]
+    ```
+    ```
+  </Tab>
+
+  <Tab title="JSON Output">
+    ```markdown
+    ## Output Format
+    
+    Return JSON matching this schema:
+    
+    ```json
+    {
+      "summary": "string",
+      "findings": [
+        {
+          "file": "path/to/file.rs",
+          "line": 42,
+          "issue": "string",
+          "severity": "high|medium|low"
+        }
+      ],
+      "assumptions": ["string"],
+      "open_questions": ["string"]
+    }
+    ```
+    ```
+  </Tab>
+
+  <Tab title="Report Template">
+    ```markdown
+    ## Output Format
+    
+    Use the template at `{baseDir}/templates/analysis-report.md`:
+    
+    1. Fill in all sections
+    2. Remove placeholder text
+    3. Add concrete examples
+    4. Include metrics and statistics
+    ```
+  </Tab>
+</Tabs>
+
+## Anti-Hallucination Techniques
+
+Prevent agents from making unsupported claims:
+
+```markdown
+## Anti-Hallucination Rules
+
+1. **Never reshape evidence to fit assumptions**
+   When you find a contradiction, update your model and state the correction:
+   "Earlier I stated X; the code at L45 shows Y instead."
+
+2. **Cite line numbers for every structural claim**
+   If you cannot point to a line, do not assert it.
+
+3. **Do not infer behavior from naming alone**
+   Read the implementation. A function named `safeTransfer` may not be safe.
+
+4. **Mark unknowns explicitly**
+   "Unclear; need to inspect X" is always better than a guess.
+
+5. **Cross-reference constantly**
+   Connect each insight to previously documented state, flows, and invariants.
+```
+
+## Invoking Agents
+
+### From Commands
+
+Commands launch agents with parsed arguments:
+
+```markdown
+# Command: /audit-context
+
+Launch the `audit-context-builder` agent with:
+- Target directory: [parsed from arguments]
+- Analysis depth: [parsed from --depth flag]
+- Focus area: [parsed from --focus flag]
+```
+
+### From Skills
+
+Skills can delegate to agents for complex sub-tasks:
+
+```markdown
+For ultra-granular function analysis, invoke the `function-analyzer` agent:
+
+- Function: [current function being analyzed]
+- Context: [surrounding code context]
+- Focus: [specific aspect to analyze]
+```
+
+### From Other Agents
+
+Agents can launch sub-agents for specialized work:
+
+```markdown
+## Workflow Step 3: Deep Function Analysis
+
+For each security-critical function identified in Step 2:
+
+Launch the `function-analyzer` agent with:
+- Function path: [file:line]
+- Analysis depth: ultra-granular
+- Return format: JSON
+
+Wait for analysis to complete before proceeding to Step 4.
+```
+
+## Testing Agents
+
+<Steps>
+  <Step title="Test with minimal input">
+    Verify the agent handles simple cases correctly.
+  </Step>
+
+  <Step title="Test with complex input">
+    Verify the agent handles edge cases and complex scenarios.
+  </Step>
+
+  <Step title="Test error handling">
+    Verify the agent gracefully handles invalid input and errors.
+  </Step>
+
+  <Step title="Verify quality gates">
+    Confirm the agent meets its own quality thresholds.
+  </Step>
+
+  <Step title="Check output format">
+    Ensure output matches the specified format exactly.
+  </Step>
+</Steps>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Single Responsibility" icon="bullseye">
+    Each agent should do one thing well. Split complex workflows across multiple agents.
+  </Card>
+
+  <Card title="Clear Constraints" icon="border-all">
+    Define exactly what the agent can and cannot do. Prevent scope creep.
+  </Card>
+
+  <Card title="Quality Gates" icon="shield-check">
+    Build verification into the workflow. Don't return until quality thresholds are met.
+  </Card>
+
+  <Card title="Structured Output" icon="table-cells">
+    Specify exact output format. Make it easy to parse and process results.
+  </Card>
+
+  <Card title="Tool Restrictions" icon="lock">
+    Only grant tools the agent actually needs. Fewer tools = more focused behavior.
+  </Card>
+
+  <Card title="Anti-Hallucination" icon="eye">
+    Require evidence for all claims. Cite line numbers. Mark unknowns explicitly.
+  </Card>
+</CardGroup>
+
+## Common Patterns
+
+### Sequential Pipeline
+
+Agents that run in sequence, each building on previous results:
+
+```
+1. context-builder    → Gathers initial context
+2. function-analyzer  → Analyzes each function
+3. report-assembler   → Combines results into final report
+```
+
+### Parallel Workers
+
+Multiple agents running simultaneously on different parts:
+
+```
+Language-specific analyzers running in parallel:
+- solidity-analyzer  → Analyzes .sol files
+- rust-analyzer      → Analyzes .rs files
+- go-analyzer        → Analyzes .go files
+
+Results combined by coordinator agent
+```
+
+### Validator Pattern
+
+Agent produces output, validator verifies correctness:
+
+```
+1. poc-generator  → Creates proof-of-concept exploit
+2. poc-validator  → Verifies PoC works as expected
+3. If validation fails → Return to step 1 with feedback
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Skills" icon="brain" href="/concepts/skills">
+    Learn how skills provide guidance agents can use
+  </Card>
+
+  <Card title="Commands" icon="terminal" href="/concepts/commands">
+    Create commands that launch agents
+  </Card>
+
+  <Card title="Create an Agent" icon="code" href="/guides/creating-agents">
+    Step-by-step guide to building agents
+  </Card>
+
+  <Card title="Agent Examples" icon="book" href="/examples/agents">
+    Browse real agent implementations
+  </Card>
+</CardGroup>

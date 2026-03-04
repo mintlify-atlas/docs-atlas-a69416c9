@@ -1,0 +1,316 @@
+---
+title: Supply Chain Risk Auditor
+description: Audit supply-chain threat landscape of project dependencies for exploitation or takeover risk
+---
+
+The Supply Chain Risk Auditor plugin generates a report on the supply-chain threat landscape of a project's direct dependencies, identifying high-risk packages and suggesting alternatives.
+
+<Note>
+This skill does **NOT** scan source code for CVEs or credentials. It evaluates dependency health and maintainer risk.
+
+**Author:** Spencer Michaels
+</Note>
+
+## Installation
+
+```bash
+/plugin install trailofbits/skills/plugins/supply-chain-risk-auditor
+```
+
+## Overview
+
+The plugin enumerates all direct dependencies of a target project, then uses the `gh` command-line tool to query information about each dependency including:
+
+- Maintainer identities and count
+- Commit history and update frequency
+- Security contacts
+- CVE history
+- Popularity metrics (stars, downloads)
+
+Based on these factors, it holistically assesses the supply-chain risk presented by each dependency and generates a summary report with remediation recommendations.
+
+## When to Use
+
+Use this plugin when:
+
+- A client is concerned about supply-chain threats to their application
+- Identifying dependencies at highest risk of takeover or compromise
+- Evaluating dependency health before a security audit
+- Assessing supply chain attack surface of a project
+- Pre-engagement scoping for supply chain concerns
+- Looking to replace dependencies with better-secured alternatives
+
+## When NOT to Use
+
+Do NOT use this plugin for:
+
+- **Active vulnerability scanning** - Use dedicated tools like `npm audit`, `pip-audit`, or Dependabot
+- **Runtime dependency analysis** - This analyzes declared dependencies, not runtime behavior
+- **License compliance auditing** - Use license scanning tools instead
+
+## Risk Criteria
+
+A dependency is flagged as high-risk if it exhibits any of these factors:
+
+<AccordionGroup>
+  <Accordion title="Single Maintainer or Small Team">
+    **Risk:** The project is primarily maintained by a single individual or small group, not backed by an organization.
+
+    **Special Cases:**
+    - **Lower risk**: Extremely prolific contributors like `sindresorhus` or Drew Devault
+    - **Higher risk**: Anonymous maintainers whose GitHub identity isn't tied to real-world identity
+
+    **Justification:** If a developer is bribed or phished, they could unilaterally push malicious code. See: left-pad incident.
+  </Accordion>
+
+  <Accordion title="Unmaintained">
+    **Indicators:**
+    - No updates for a long period
+    - Explicitly deprecated or archived
+    - README notes project is inactive or seeking maintainers
+    - Large number of unresponded bug/security issues (feature requests don't count)
+
+    **Justification:** Identified vulnerabilities may not be patched in a timely manner.
+  </Accordion>
+
+  <Accordion title="Low Popularity">
+    **Indicators:**
+    - Relatively low number of GitHub stars compared to other dependencies
+    - Low download counts relative to the ecosystem
+
+    **Justification:** Fewer users means fewer eyes on the project. Malicious code may not be noticed quickly.
+  </Accordion>
+
+  <Accordion title="High-Risk Features">
+    **Examples:**
+    - FFI (Foreign Function Interface)
+    - Deserialization
+    - Third-party code execution
+    - Shell command execution
+    - Cryptographic implementations
+
+    **Justification:** These features are especially prone to exploitation and need high scrutiny.
+  </Accordion>
+
+  <Accordion title="Presence of Past CVEs">
+    **Evaluation:**
+    - High or critical severity CVEs
+    - Large number of CVEs relative to popularity and complexity
+    - Recent unpatched CVEs
+
+    **Note:** Extremely popular projects naturally have more CVEs due to greater scrutiny. Context matters.
+
+    **Justification:** History of vulnerabilities may indicate code quality issues or high attack surface.
+  </Accordion>
+
+  <Accordion title="Absence of Security Contact">
+    **Missing from:**
+    - `.github/SECURITY.md`
+    - `CONTRIBUTING.md`
+    - `README.md`
+    - Project website
+
+    **Justification:** Security researchers have difficulty reporting vulnerabilities safely and in a timely manner.
+  </Accordion>
+</AccordionGroup>
+
+## Prerequisites
+
+<Warning>
+The `gh` (GitHub CLI) tool must be installed and authenticated.
+
+```bash
+# Check installation
+gh --version
+
+# Authenticate if needed
+gh auth login
+```
+
+Ask the user to install if not found.
+</Warning>
+
+## Workflow
+
+### Phase 1: Initial Setup
+
+1. **Create workspace directory** - `.supply-chain-risk-auditor/`
+2. **Initialize report** - Start `results.md` based on template
+3. **Find dependency repositories** - Extract git URLs for all direct dependencies
+4. **Normalize URLs** - Convert `name/project` format to full GitHub URLs
+
+### Phase 2: Dependency Audit
+
+For each dependency, evaluate risk according to criteria:
+
+<Steps>
+  <Step title="Query Exact Data">
+    Use `gh` tool to query:
+    - Number of maintainers
+    - Star count
+    - Open issues (bug/security only)
+    - Last commit date
+    - Security policy presence
+    - CVE history
+
+    <Warning>
+    **Accuracy is critical.** All numbers cited (stars, issues, etc.) must be exact. Round using `~` notation (e.g., "~4000 stars").
+    </Warning>
+  </Step>
+
+  <Step title="Assess Risk Factors">
+    Check each dependency against all risk criteria.
+  </Step>
+
+  <Step title="Document High-Risk Dependencies">
+    Add to High-Risk Dependencies table if **any** risk factor applies.
+
+    Skip low-risk dependencies for conciseness. Absence from report indicates low/no risk.
+  </Step>
+</Steps>
+
+### Phase 3: Post-Audit
+
+1. **Suggest Alternatives** - For each high-risk dependency, find:
+   - Direct successors or drop-in replacements
+   - More popular, better-maintained alternatives
+   - Similar functionality with better security posture
+   - Provide short justification for each suggestion
+
+2. **Summarize Findings** - Fill out:
+   - Counts by Risk Factor table
+   - Executive Summary with overall security posture
+   - Recommendations section
+
+## Report Structure
+
+The generated `results.md` includes:
+
+```markdown
+# Supply Chain Risk Audit Report
+
+## Executive Summary
+[Overall security posture and key findings]
+
+## Counts by Risk Factor
+| Risk Factor | Count |
+|-------------|-------|
+| Single Maintainer | X |
+| Unmaintained | Y |
+| ...
+
+## High-Risk Dependencies
+| Dependency | Risk Factors | Suggested Alternative | Justification |
+|------------|--------------|----------------------|---------------|
+| package-a | Unmaintained, Low popularity | alternative-a | Active development, org-backed |
+| ...
+
+## Recommendations
+[Prioritized recommendations for risk mitigation]
+```
+
+<Note>
+**Do not add sections** beyond those in the template. Keep the report focused and actionable.
+</Note>
+
+## Example Risk Assessment
+
+<CodeGroup>
+```markdown High-Risk Example
+| Dependency | Risk Factors | Details |
+|------------|--------------|---------|
+| tiny-helper | Single maintainer, Low popularity | ~200 stars, 1 contributor, no security contact |
+| old-parser | Unmaintained | Last commit 3 years ago, 47 open security issues |
+| crypto-lib | High-risk features, Past CVEs | Implements custom crypto, 3 critical CVEs in 2 years |
+```
+
+```markdown Suggested Alternatives
+| Original | Alternative | Justification |
+|----------|-------------|---------------|
+| tiny-helper | lodash | Industry standard, org-backed, ~55k stars |
+| old-parser | modern-parser | Active fork by community, security-first design |
+| crypto-lib | libsodium | Audited implementation, widely trusted |
+```
+</CodeGroup>
+
+## Evaluation Example
+
+When assessing a dependency like `example-pkg`:
+
+```bash
+# Query maintainer count
+gh api repos/owner/example-pkg --jq '.organization // "individual"'
+
+# Check star count
+gh api repos/owner/example-pkg --jq '.stargazers_count'
+
+# Count open security issues
+gh issue list --repo owner/example-pkg --label security --state open --json number --jq 'length'
+
+# Check last activity
+gh api repos/owner/example-pkg --jq '.pushed_at'
+
+# Look for security policy
+gh api repos/owner/example-pkg/contents/.github/SECURITY.md 2>/dev/null && echo "Has policy" || echo "No policy"
+```
+
+<Tip>
+**Risk Context Matters**
+
+A package with 5 CVEs but 100k stars and active maintenance may be lower risk than a package with 1 CVE, 100 stars, and a single anonymous maintainer.
+
+Evaluate holistically, not just by counting risk factors.
+</Tip>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Be Objective" icon="balance-scale">
+    Base assessments on measurable data, not assumptions. Use `gh` to get exact numbers.
+  </Card>
+  <Card title="Provide Context" icon="messages">
+    Explain why a dependency is flagged and what makes the alternative better.
+  </Card>
+  <Card title="Prioritize Impact" icon="arrow-up-right-dots">
+    Focus on dependencies with highest risk exposure and usage in critical paths.
+  </Card>
+  <Card title="Suggest Actionable Alternatives" icon="lightbulb">
+    Recommend realistic replacements, preferably drop-in or well-documented migrations.
+  </Card>
+</CardGroup>
+
+## Related Skills
+
+<CardGroup cols={2}>
+  <Card title="Static Analysis" href="/plugins/static-analysis" icon="magnifying-glass-chart">
+    Scan dependency code for vulnerabilities
+  </Card>
+  <Card title="Audit Context Building" href="/plugins/audit-context-building" icon="sitemap">
+    Deep architectural analysis before auditing
+  </Card>
+</CardGroup>
+
+## Limitations
+
+<Warning>
+**What This Plugin Does NOT Do**
+
+- ✗ Scan for vulnerabilities in dependency code
+- ✗ Detect malicious packages in real-time
+- ✗ Analyze transitive (indirect) dependencies comprehensively
+- ✗ Check for license compliance
+- ✗ Monitor runtime dependency behavior
+
+For these tasks, use dedicated tools like Snyk, Socket Security, or OSSF Scorecard.
+</Warning>
+
+## Output Location
+
+All analysis artifacts are stored in:
+
+```
+.supply-chain-risk-auditor/
+└── results.md
+```
+
+This directory can be committed to version control to track risk posture over time.

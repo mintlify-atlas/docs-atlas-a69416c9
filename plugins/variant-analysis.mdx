@@ -1,0 +1,491 @@
+---
+title: Variant Analysis
+description: Find similar vulnerabilities and bugs across codebases using pattern-based analysis
+---
+
+The Variant Analysis plugin provides a systematic methodology for finding similar vulnerabilities and bugs across codebases after discovering an initial pattern.
+
+<Info>
+**Author:** Axel Mierczuk
+
+Once you've found one vulnerability, there are likely more. This plugin helps you hunt them down systematically.
+</Info>
+
+## Installation
+
+```bash
+/plugin install trailofbits/skills/plugins/variant-analysis
+```
+
+## Overview
+
+Variant analysis is the process of taking a known vulnerability and searching for similar instances across a codebase. The plugin provides:
+
+- **Five-step systematic process** from understanding to reporting
+- **Tool selection guidance** (ripgrep, Semgrep, CodeQL)
+- **Critical pitfall catalog** to avoid missing variants
+- **Ready-to-use templates** for CodeQL and Semgrep in multiple languages
+- **Detailed methodology** for abstraction and generalization
+
+## When to Use
+
+Use this plugin when:
+
+- A vulnerability has been found and you need to search for similar instances
+- Building or refining CodeQL/Semgrep queries for security patterns
+- Performing systematic code audits after an initial issue discovery
+- Hunting for bug variants across a codebase
+- Analyzing how a single root cause manifests in different code paths
+
+## When NOT to Use
+
+Do NOT use this plugin for:
+
+- **Initial vulnerability discovery** - Use audit-context-building or domain-specific audits instead
+- **General code review** - Without a known pattern to search for
+- **Writing fix recommendations** - Use issue-writer instead
+- **Understanding unfamiliar code** - Use audit-context-building for deep comprehension first
+
+## The Five-Step Process
+
+<Steps>
+  <Step title="Understand the Original Issue">
+    Before searching, deeply understand the known bug:
+
+    - **What is the root cause?** Not the symptom, but WHY it's vulnerable
+    - **What conditions are required?** Control flow, data flow, state
+    - **What makes it exploitable?** User control, missing validation, etc.
+
+    <Tip>
+    **The Root Cause Statement**
+
+    Formulate: "This vulnerability exists because [UNTRUSTED DATA] reaches [DANGEROUS OPERATION] without [REQUIRED PROTECTION]."
+
+    Example: "User input reaches `eval()` without sanitization"
+
+    This statement IS your search pattern.
+    </Tip>
+  </Step>
+
+  <Step title="Create an Exact Match">
+    Start with a pattern that matches ONLY the known instance:
+
+    ```bash
+    rg -n "exact_vulnerable_code_here"
+    ```
+
+    **Verify:** Does it match exactly ONE location (the original)?
+
+    This establishes your baseline before generalization.
+  </Step>
+
+  <Step title="Identify Abstraction Points">
+    Determine what can be generalized:
+
+    | Element | Keep Specific | Can Abstract |
+    |---------|---------------|--------------|
+    | Function name | If unique to bug | If pattern applies to family |
+    | Variable names | Never | Always use metavariables |
+    | Literal values | If value matters | If any value triggers bug |
+    | Arguments | If position matters | Use `...` wildcards |
+  </Step>
+
+  <Step title="Iteratively Generalize">
+    **Change ONE element at a time:**
+
+    1. Run the pattern
+    2. Review ALL new matches
+    3. Classify: true positive or false positive?
+    4. If FP rate acceptable, generalize next element
+    5. If FP rate too high, revert and try different abstraction
+
+    <Warning>
+    **Stop when false positive rate exceeds ~50%**
+
+    High FP rates waste analysis time and obscure real vulnerabilities.
+    </Warning>
+  </Step>
+
+  <Step title="Analyze and Triage Results">
+    For each match, document:
+
+    - **Location**: File, line, function
+    - **Confidence**: High/Medium/Low
+    - **Exploitability**: Reachable? Controllable inputs?
+    - **Priority**: Based on impact and exploitability
+  </Step>
+</Steps>
+
+## Tool Selection
+
+Choose the right tool for your analysis:
+
+| Scenario | Tool | Why |
+|----------|------|-----|
+| Quick surface search | **ripgrep** | Fast, zero setup, good for reconnaissance |
+| Simple pattern matching | **Semgrep** | Easy syntax, no build needed, works on incomplete code |
+| Data flow tracking | **Semgrep taint / CodeQL** | Follows values across functions and files |
+| Cross-function analysis | **CodeQL** | Best interprocedural analysis, deep data flow |
+| Non-building code | **Semgrep** | Works without compilation |
+
+<Tip>
+**Progressive Tool Use**
+
+Start with ripgrep for quick reconnaissance, use Semgrep for pattern iteration, and finish with CodeQL for deep interprocedural analysis.
+</Tip>
+
+## The Abstraction Ladder
+
+Patterns exist at different abstraction levels. Climb the ladder systematically:
+
+<AccordionGroup>
+  <Accordion title="Level 0: Exact Match">
+    Match the literal vulnerable code:
+
+    ```python
+    # Original vulnerable code
+    query = "SELECT * FROM users WHERE id=" + request.args.get('id')
+    ```
+
+    ```bash
+    # Level 0 pattern
+    rg 'SELECT \* FROM users WHERE id=" \+ request\.args\.get'
+    ```
+
+    - **Matches**: 1 (the original)
+    - **False positives**: 0
+    - **Value**: Confirms bug exists, baseline for generalization
+  </Accordion>
+
+  <Accordion title="Level 1: Variable Abstraction">
+    Replace variable names with wildcards:
+
+    ```yaml
+    # Level 1 pattern
+    pattern: $QUERY = "SELECT * FROM users WHERE id=" + $INPUT
+    ```
+
+    - **Matches**: 3-5 (same query pattern, different variables)
+    - **False positives**: Low
+    - **Value**: Find copy-paste variants
+  </Accordion>
+
+  <Accordion title="Level 2: Structural Abstraction">
+    Generalize the structure:
+
+    ```yaml
+    # Level 2 pattern
+    patterns:
+      - pattern: $Q = "..." + $INPUT
+      - pattern-inside: |
+          def $FUNC(...):
+            ...
+            cursor.execute($Q)
+    ```
+
+    - **Matches**: 10-30 (any string concat used in query)
+    - **False positives**: Medium
+    - **Value**: Find pattern variants
+  </Accordion>
+
+  <Accordion title="Level 3: Semantic Abstraction">
+    Abstract to the security property:
+
+    ```yaml
+    # Level 3 pattern (taint mode)
+    mode: taint
+    pattern-sources:
+      - pattern: request.args.get(...)
+      - pattern: request.form.get(...)
+    pattern-sinks:
+      - pattern: cursor.execute(...)
+    ```
+
+    - **Matches**: 50-100+ (any user input to any query)
+    - **False positives**: High (many have proper parameterization)
+    - **Value**: Comprehensive coverage, requires triage
+  </Accordion>
+</AccordionGroup>
+
+### Choosing Your Level
+
+| Goal | Recommended Level |
+|------|-------------------|
+| Verify a specific fix | Level 0 |
+| Find copy-paste bugs | Level 1 |
+| Audit a component | Level 2 |
+| Full security assessment | Level 3 |
+
+## Critical Pitfalls to Avoid
+
+<Warning>
+These common mistakes cause analysts to miss real vulnerabilities:
+</Warning>
+
+### 1. Narrow Search Scope
+
+**Problem:** Searching only the module where the original bug was found misses variants in other locations.
+
+**Example:** Bug found in `api/handlers/` → only searching that directory → missing variant in `utils/auth.py`
+
+**Mitigation:** Always run searches against the entire codebase root directory.
+
+### 2. Pattern Too Specific
+
+**Problem:** Using only the exact attribute/function from the original bug misses variants using related constructs.
+
+**Example:** Bug uses `isAuthenticated` check → only searching for that exact term → missing bugs using `isActive`, `isAdmin`, `isVerified`
+
+**Mitigation:** Enumerate ALL semantically related attributes/functions for the bug class.
+
+### 3. Single Vulnerability Class
+
+**Problem:** Focusing on only one manifestation of the root cause misses other ways the same logic error appears.
+
+**Example:** Original bug is "return allow when condition is false" → only searching that pattern → missing:
+- Null equality bypasses (`null == null` evaluates to true)
+- Documentation/code mismatches (function does opposite of docs)
+- Inverted conditional logic (wrong branch taken)
+
+**Mitigation:** List all possible manifestations of the root cause before searching.
+
+### 4. Missing Edge Cases
+
+**Problem:** Testing patterns only with "normal" scenarios misses vulnerabilities triggered by edge cases.
+
+**Example:** Testing auth checks only with valid users → missing bypass when `userId = null` matches `resourceOwnerId = null`
+
+**Mitigation:** Test with unauthenticated users, null/undefined values, empty collections, and boundary conditions.
+
+## Expanding Vulnerability Classes
+
+A single root cause can manifest in multiple ways. Before concluding your search, expand to related vulnerability classes:
+
+<AccordionGroup>
+  <Accordion title="Semantically Related Functions">
+    **If bug involves `isAuthenticated`, also check:**
+    - `isActive`, `isAdmin`, `isVerified`, `isLoggedIn`
+
+    **If bug involves `userId`, also check:**
+    - `ownerId`, `creatorId`, `authorId`
+  </Accordion>
+
+  <Accordion title="Boolean Logic Errors">
+    - Inverted conditions (`if not x` vs `if x`)
+    - Wrong default return value (`return true` vs `return false`)
+    - Short-circuit evaluation errors
+  </Accordion>
+
+  <Accordion title="Edge Cases by Data Type">
+    - Null/None/undefined comparisons
+    - Empty string vs null
+    - Zero vs null
+    - Empty array/collection
+  </Accordion>
+
+  <Accordion title="Documentation Mismatches">
+    Function does opposite of docstring:
+
+    ```python
+    def check_restricted_permission(user, perm):
+        """Returns True if access should be DENIED."""
+        if user.has_perm(perm):
+            return True  # BUG: This GRANTS access
+        return False
+    ```
+
+    **Detection:** Search for functions with "deny", "restrict", "block", "forbid" and verify return semantics.
+  </Accordion>
+
+  <Accordion title="Null Equality Bypasses">
+    ```python
+    # If both are None, None == None is True
+    if order.owner_id == current_user.id:
+        return True  # Allows access!
+    ```
+
+    **Detection:** Find equality-based permission checks, trace if both sides can be null.
+  </Accordion>
+</AccordionGroup>
+
+## Ready-to-Use Templates
+
+The plugin includes language-specific templates:
+
+<Tabs>
+  <Tab title="CodeQL">
+    Templates for:
+    - Python (`resources/codeql/python.ql`)
+    - JavaScript (`resources/codeql/javascript.ql`)
+    - Java (`resources/codeql/java.ql`)
+    - Go (`resources/codeql/go.ql`)
+    - C++ (`resources/codeql/cpp.ql`)
+
+    Basic structure:
+    ```ql
+    import python
+
+    from CallExpr call, Expr arg
+    where
+      call.getFunc().getName() = "dangerous_func" and
+      arg = call.getArg(0) and
+      exists(DataFlow::Node source |
+        source.asExpr() = arg and
+        source.getALocalSource() instanceof UntrustedInput
+      )
+    select call, "Untrusted input to dangerous function"
+    ```
+  </Tab>
+
+  <Tab title="Semgrep">
+    Templates for:
+    - Python (`resources/semgrep/python.yaml`)
+    - JavaScript (`resources/semgrep/javascript.yaml`)
+    - Java (`resources/semgrep/java.yaml`)
+    - Go (`resources/semgrep/go.yaml`)
+    - C++ (`resources/semgrep/cpp.yaml`)
+
+    Basic structure:
+    ```yaml
+    rules:
+      - id: variant-search
+        mode: taint
+        pattern-sources:
+          - pattern: request.args.get(...)
+        pattern-sinks:
+          - pattern: dangerous_func(...)
+        message: Variant of CVE-XXXX
+        severity: ERROR
+        languages: [python]
+    ```
+  </Tab>
+</Tabs>
+
+## Commands
+
+The plugin includes a `/variants` command for quick invocation:
+
+```bash
+/variants
+```
+
+This command is context-driven and uses conversation context to understand:
+1. The original bug/vulnerability that was found
+2. The codebase to search
+
+## Variant Report Template
+
+Use the provided template for documenting findings:
+
+```markdown
+## Variant Analysis: [Original Bug ID]
+
+### Root Cause
+[Statement of the vulnerability pattern]
+
+### Patterns Tried
+| Pattern | Level | Matches | True Pos | False Pos | Notes |
+|---------|-------|---------|----------|-----------|-------|
+| exact   | 0     | 1       | 1        | 0         | Baseline |
+
+### Confirmed Variants
+| Location | Severity | Status | Notes |
+|----------|----------|--------|-------|
+| file:line| High     | Fixed  | ...   |
+
+### False Positive Patterns
+- Pattern X: Always FP because [reason]
+```
+
+## Key Principles
+
+<CardGroup cols={2}>
+  <Card title="Root Cause First" icon="magnifying-glass">
+    Understand WHY before searching for WHERE
+  </Card>
+  <Card title="Start Specific" icon="crosshairs">
+    First pattern should match exactly the known bug
+  </Card>
+  <Card title="One Change at a Time" icon="stairs">
+    Generalize incrementally, verify after each change
+  </Card>
+  <Card title="Know When to Stop" icon="hand">
+    50%+ FP rate means you've gone too generic
+  </Card>
+  <Card title="Search Everywhere" icon="globe">
+    Always search the ENTIRE codebase
+  </Card>
+  <Card title="Expand Classes" icon="diagram-project">
+    One root cause has multiple manifestations
+  </Card>
+</CardGroup>
+
+## Related Skills
+
+<CardGroup cols={2}>
+  <Card title="CodeQL" href="/plugins/static-analysis#codeql-skill" icon="magnifying-glass-chart">
+    Primary tool for deep interprocedural variant analysis
+  </Card>
+  <Card title="Semgrep" href="/plugins/static-analysis#semgrep-skill" icon="bolt">
+    Fast pattern matching for simpler variants
+  </Card>
+  <Card title="SARIF Parsing" href="/plugins/static-analysis#sarif-parsing-skill" icon="file-code">
+    Process variant analysis results
+  </Card>
+</CardGroup>
+
+## Example Workflow
+
+<Steps>
+  <Step title="Original Bug Found">
+    ```python
+    # Found in api/auth.py:42
+    if user.isAuthenticated == request.token:
+        return allow_access()
+    ```
+    
+    **Root cause:** Comparing boolean to string always fails; logic inverted
+  </Step>
+
+  <Step title="Exact Match (Level 0)">
+    ```bash
+    rg "user.isAuthenticated == request.token"
+    # Result: 1 match (the original)
+    ```
+  </Step>
+
+  <Step title="Variable Abstraction (Level 1)">
+    ```yaml
+    pattern: $USER.isAuthenticated == $INPUT
+    # Result: 3 matches (2 new variants found)
+    ```
+  </Step>
+
+  <Step title="Expand to Related Properties">
+    ```yaml
+    patterns:
+      - pattern-either:
+          - pattern: $USER.isAuthenticated == $INPUT
+          - pattern: $USER.isActive == $INPUT
+          - pattern: $USER.isVerified == $INPUT
+    # Result: 7 matches (4 more variants found)
+    ```
+  </Step>
+
+  <Step title="Document and Triage">
+    All 7 instances confirmed as true positives with varying severity based on impact and exploitability.
+  </Step>
+</Steps>
+
+## The Expert Mindset
+
+1. **Understand before searching** - Root cause analysis is non-negotiable
+2. **Start specific** - First pattern should match exactly one thing
+3. **Climb the ladder** - Generalize one step at a time
+4. **Measure as you go** - Track matches and FP rates at each step
+5. **Know when to stop** - High FP rate means you've gone too far
+6. **Iterate ruthlessly** - Refine patterns based on what you learn
+7. **Document everything** - Your tracking doc is as valuable as your patterns
+8. **Expand vulnerability classes** - One root cause has many manifestations
+9. **Check semantics** - Verify code matches documentation intent
+10. **Test edge cases** - Null values and boundary conditions reveal hidden bugs

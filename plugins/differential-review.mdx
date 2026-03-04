@@ -1,0 +1,356 @@
+---
+title: Differential Review
+description: Security-focused differential review of code changes with git history analysis and blast radius estimation
+---
+
+Security-focused differential review of code changes (PRs, commits, diffs) with adaptive depth scaling, git history analysis, blast radius calculation, and comprehensive markdown reports. Automatically detects and prevents security regressions.
+
+## Overview
+
+This plugin performs comprehensive security review of code changes by analyzing diffs in the context of the entire codebase. It scales analysis depth based on codebase size, uses git blame to understand why code existed, calculates the impact radius of changes, and identifies test coverage gaps.
+
+<Info>
+**Author:** Omar Inuwa  
+**Version:** 1.0.0
+</Info>
+
+## Core Principles
+
+<CardGroup cols={2}>
+  <Card title="Risk-First" icon="triangle-exclamation">
+    Focus on auth, crypto, value transfer, and external calls before everything else
+  </Card>
+  <Card title="Evidence-Based" icon="file-contract">
+    Every finding backed by git history, line numbers, and concrete attack scenarios
+  </Card>
+  <Card title="Adaptive" icon="gauge-high">
+    Scale analysis depth to codebase size (SMALL/MEDIUM/LARGE)
+  </Card>
+  <Card title="Output-Driven" icon="file-export">
+    Always generate comprehensive markdown report file
+  </Card>
+</CardGroup>
+
+## When to Use
+
+Use this skill when you need to:
+
+- Review PRs, commits, or diffs for security vulnerabilities
+- Detect security regressions (re-introduced vulnerabilities)
+- Analyze the blast radius of code changes
+- Check test coverage gaps for modified code
+- Perform pre-merge security review for critical changes
+
+## Installation
+
+```bash
+/plugin install trailofbits/skills/plugins/differential-review
+```
+
+Or use the slash command:
+
+```
+/trailofbits:diff-review <pr-url|commit-sha|diff-path> [--baseline <ref>]
+```
+
+## Features
+
+### Risk-First Analysis
+
+Changes are classified by risk level and prioritized accordingly:
+
+| Risk Level | Triggers |
+|------------|----------|
+| **HIGH** | Auth, crypto, external calls, value transfer, validation removal |
+| **MEDIUM** | Business logic, state changes, new public APIs |
+| **LOW** | Comments, tests, UI, logging |
+
+<Warning>
+**Refactors are HIGH risk until proven LOW.** Refactoring often breaks invariants.
+</Warning>
+
+### Git History Analysis
+
+Uses `git blame` to understand:
+- Why removed code existed (was it a security fix?)
+- When it was added (recent or legacy?)
+- Who authored it (security-aware developer?)
+- Commit messages revealing intent (CVE fix, security patch?)
+
+<Tip>
+Removed code from "security", "CVE", or "fix" commits triggers immediate escalation.
+</Tip>
+
+### Blast Radius Calculation
+
+Quantifies the impact of changes by counting:
+- Direct callers of modified functions
+- Transitive callers (functions calling the callers)
+- Shared state dependencies
+- Cross-module coupling
+
+**Example:**
+- 1-5 callers = Low blast radius
+- 5-20 callers = Medium blast radius
+- 20-50 callers = High blast radius
+- 50+ callers = Critical blast radius (requires deep analysis)
+
+### Adaptive Depth Scaling
+
+| Codebase Size | Strategy | Approach |
+|---------------|----------|----------|
+| **SMALL** (under 20 files) | DEEP | Read all dependencies, full git blame |
+| **MEDIUM** (20-200) | FOCUSED | 1-hop dependencies, priority files only |
+| **LARGE** (200+) | SURGICAL | Critical paths only, targeted analysis |
+
+## Workflow
+
+The complete workflow spans Pre-Analysis + Phases 0-6:
+
+<Steps>
+  <Step title="Pre-Analysis (Optional)">
+    Build baseline context with `audit-context-building` skill if available
+  </Step>
+  <Step title="Phase 0: Intake & Triage">
+    Extract changes, assess size, risk-score files
+  </Step>
+  <Step title="Phase 1: Changed Code Analysis">
+    Analyze diffs, git blame, check for regressions
+  </Step>
+  <Step title="Phase 2: Test Coverage Analysis">
+    Identify coverage gaps in modified code
+  </Step>
+  <Step title="Phase 3: Blast Radius Analysis">
+    Calculate impact by counting callers and dependencies
+  </Step>
+  <Step title="Phase 4: Deep Context Analysis">
+    Five Whys root cause analysis for HIGH risk changes
+  </Step>
+  <Step title="Phase 5: Adversarial Analysis">
+    Hunt vulnerabilities with attacker model
+  </Step>
+  <Step title="Phase 6: Report Generation">
+    Generate comprehensive markdown report
+  </Step>
+</Steps>
+
+## Modular Documentation Architecture
+
+This skill uses progressive disclosure for token efficiency:
+
+<CardGroup cols={2}>
+  <Card title="SKILL.md" icon="door-open">
+    Main entry point with quick reference, decision tree, and quality checklist
+  </Card>
+  <Card title="methodology.md" icon="list-check">
+    Detailed phase-by-phase workflow for Phases 0-4
+  </Card>
+  <Card title="adversarial.md" icon="user-secret">
+    Attacker modeling and exploit scenarios for Phase 5
+  </Card>
+  <Card title="reporting.md" icon="file-lines">
+    Report structure and formatting for Phase 6
+  </Card>
+  <Card title="patterns.md" icon="magnifying-glass-chart">
+    Common vulnerability patterns reference
+  </Card>
+</CardGroup>
+
+<Tip>
+Load only the documentation you need. Use the decision tree to jump directly to the right phase.
+</Tip>
+
+## Example Usage
+
+### Quick Triage (Small PR)
+
+```
+Review the security implications of this PR:
+git diff main..feature/auth-changes
+```
+
+**Strategy:** Quick Reference only
+1. Classify risk level per file (2 HIGH, 3 LOW)
+2. Focus on 2 HIGH files only
+3. Git blame removed code
+4. Generate minimal report
+
+**Time:** ~30 minutes
+
+### Standard Review (Medium Codebase)
+
+```
+Perform security review of PR #123 with full blast radius analysis
+```
+
+**Strategy:** FOCUSED (see methodology.md)
+1. Full workflow on HIGH RISK files
+2. Surface scan on MEDIUM
+3. Skip LOW risk files
+4. Complete report with all sections
+
+**Time:** ~3-4 hours
+
+### Deep Audit (Large, Critical Change)
+
+```
+Deep security audit of the auth system rewrite in commit abc123
+```
+
+**Strategy:** SURGICAL + audit-context-building
+1. Baseline context with audit-context-building
+2. Deep analysis on auth changes only
+3. Blast radius analysis
+4. Adversarial modeling
+5. Comprehensive report
+
+**Time:** ~6-8 hours
+
+## Report Output
+
+The generated markdown report includes:
+
+<AccordionGroup>
+  <Accordion title="Executive Summary">
+    High-level overview with severity distribution: X High, Y Medium, Z Low, W Info
+  </Accordion>
+  <Accordion title="Critical Findings">
+    Attack scenarios, PoCs, and exploitation details for high-severity issues
+  </Accordion>
+  <Accordion title="Test Coverage Analysis">
+    Gaps in test coverage for modified code paths
+  </Accordion>
+  <Accordion title="Blast Radius Analysis">
+    Quantified impact with caller counts and dependency graphs
+  </Accordion>
+  <Accordion title="Historical Context">
+    Git blame results showing removed code history and regression risks
+  </Accordion>
+  <Accordion title="Actionable Recommendations">
+    Specific remediation steps with code examples
+  </Accordion>
+</AccordionGroup>
+
+## Red Flags (Stop and Investigate)
+
+**Immediate escalation triggers:**
+
+<Warning>
+- Removed code from "security", "CVE", or "fix" commits
+- Access control modifiers removed (`onlyOwner`, `internal` → `external`)
+- Validation removed without replacement
+- External calls added without checks
+- High blast radius (50+ callers) + HIGH risk change
+</Warning>
+
+These patterns require adversarial analysis even in quick triage.
+
+## Rationalizations to Reject
+
+<AccordionGroup>
+  <Accordion title='"Small PR, quick review"'>
+    **Why it's wrong:** Heartbleed was 2 lines  
+    **Required action:** Classify by RISK, not size
+  </Accordion>
+  <Accordion title='"I know this codebase"'>
+    **Why it's wrong:** Familiarity breeds blind spots  
+    **Required action:** Build explicit baseline context
+  </Accordion>
+  <Accordion title='"Git history takes too long"'>
+    **Why it's wrong:** History reveals regressions  
+    **Required action:** Never skip Phase 1
+  </Accordion>
+  <Accordion title='"Blast radius is obvious"'>
+    **Why it's wrong:** You'll miss transitive callers  
+    **Required action:** Calculate quantitatively
+  </Accordion>
+  <Accordion title='"No tests = not my problem"'>
+    **Why it's wrong:** Missing tests = elevated risk rating  
+    **Required action:** Flag in report, elevate severity
+  </Accordion>
+  <Accordion title='"Just a refactor, no security impact"'>
+    **Why it's wrong:** Refactors break invariants  
+    **Required action:** Analyze as HIGH until proven LOW
+  </Accordion>
+  <Accordion title="I'll explain verbally">
+    **Why it's wrong:** No artifact = findings lost  
+    **Required action:** Always write report
+  </Accordion>
+</AccordionGroup>
+
+## Example Vulnerability: Security Regression
+
+**Git blame reveals removed security code:**
+
+```diff
+- // Security fix: validate length to prevent overflow (CVE-2023-12345)
+- if (input.length > MAX_SIZE) {
+-     throw new Error("Input too large");
+- }
++ // Refactored for performance
+  processInput(input);
+```
+
+**Analysis:**
+1. **Git blame:** Removed code added 6 months ago in commit "Fix CVE-2023-12345"
+2. **Risk:** HIGH - validation removal on a known CVE fix
+3. **Impact:** Re-introduces buffer overflow vulnerability
+4. **Blast radius:** 47 callers of `processInput()`
+5. **Verdict:** Critical security regression
+
+## Example Vulnerability: Access Control Change
+
+```diff
+- function withdraw() internal {
++ function withdraw() external {
+      payable(msg.sender).transfer(balance);
+  }
+```
+
+**Analysis:**
+1. **Change:** Visibility modifier `internal` → `external`
+2. **Risk:** HIGH - access control modification
+3. **Impact:** Anyone can now call `withdraw()`, not just contract itself
+4. **Attack scenario:** Attacker calls `withdraw()` directly, drains contract
+5. **Severity:** Critical
+
+## Quality Checklist
+
+Before delivering a differential review:
+
+- [ ] All changed files analyzed
+- [ ] Git blame on removed security code
+- [ ] Blast radius calculated for HIGH risk changes
+- [ ] Attack scenarios are concrete (not generic)
+- [ ] Findings reference specific line numbers + commits
+- [ ] Report file generated and saved
+- [ ] User notified with summary
+
+## Integration with Other Skills
+
+**audit-context-building:**
+- Pre-Analysis: Build baseline context before differential review
+- Phase 4: Deep context on HIGH RISK changes
+
+**fp-check:**
+- Verify suspected vulnerabilities found during review
+
+**issue-writer:**
+- Transform findings into formal audit reports
+- Command: `issue-writer --input DIFFERENTIAL_REVIEW_REPORT.md --format audit-report`
+
+## When NOT to Use
+
+Do not use differential-review for:
+
+- **Greenfield code** (no baseline to compare)
+- **Documentation-only changes** (no security impact)
+- **Formatting/linting** (cosmetic changes)
+- **User explicitly requests quick summary only** (they accept risk)
+
+For these cases, use standard code review instead.
+
+## Related Skills
+
+- [Audit Context Building](/plugins/audit-context-building) - Used for baseline analysis
+- [FP Check](/plugins/fp-check) - Verify suspected vulnerabilities

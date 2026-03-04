@@ -1,0 +1,318 @@
+---
+title: Audit Context Building
+description: Build deep architectural context through ultra-granular code analysis before vulnerability hunting
+---
+
+Build deep architectural context through ultra-granular, line-by-line code analysis before vulnerability hunting. This skill governs how Claude thinks during the context-building phase of an audit.
+
+## Overview
+
+This skill enables systematic bottom-up code comprehension through micro-level analysis. When active, Claude performs line-by-line and block-by-block examination applying First Principles, 5 Whys, and 5 Hows at granular scale to build stable, explicit mental models before any vulnerability identification.
+
+<Info>
+**Author:** Omar Inuwa  
+**Version:** 1.1.0
+</Info>
+
+<Warning>
+This is a **pure context building** skill. It does NOT identify vulnerabilities, propose fixes, generate proofs-of-concept, or assign severity. It exists solely to build deep understanding before the vulnerability-hunting phase.
+</Warning>
+
+## When to Use
+
+Use this skill when you need to:
+
+<CardGroup cols={2}>
+  <Card title="Deep Comprehension" icon="brain">
+    Develop thorough understanding of a codebase before security auditing
+  </Card>
+  <Card title="Bottom-Up Analysis" icon="arrow-up-from-bracket">
+    Build understanding from first principles instead of high-level guessing
+  </Card>
+  <Card title="Reduce Hallucinations" icon="shield-check">
+    Minimize context loss and false assumptions during complex analysis
+  </Card>
+  <Card title="Architecture Review" icon="sitemap">
+    Prepare for threat modeling or comprehensive system review
+  </Card>
+</CardGroup>
+
+## Installation
+
+```bash
+/plugin install trailofbits/skills/plugins/audit-context-building
+```
+
+Or use the slash command:
+
+```
+/trailofbits:audit-context <codebase-path> [--focus <module>]
+```
+
+## Analysis Phases
+
+The skill follows a structured three-phase workflow:
+
+<Steps>
+  <Step title="Initial Orientation">
+    Bottom-up scan to map modules, entrypoints, actors, and storage without assuming behavior
+  </Step>
+  <Step title="Ultra-Granular Function Analysis">
+    Line-by-line semantic analysis with cross-function flow tracking and invariant identification
+  </Step>
+  <Step title="Global System Understanding">
+    State/invariant reconstruction, workflow mapping, and trust boundary identification
+  </Step>
+</Steps>
+
+## Phase 1: Initial Orientation
+
+Before deep analysis, perform minimal mapping to establish anchors:
+
+1. Identify major modules/files/contracts
+2. Note obvious public/external entrypoints
+3. Identify likely actors (users, owners, relayers, oracles, other contracts)
+4. Identify important storage variables, dicts, state structs, or cells
+5. Build a preliminary structure without assuming behavior
+
+## Phase 2: Ultra-Granular Function Analysis
+
+Every non-trivial function receives full micro analysis following this checklist:
+
+### Per-Function Microstructure
+
+**1. Purpose**
+- Why the function exists and its role in the system
+
+**2. Inputs & Assumptions**
+- Parameters and implicit inputs (state, sender, env)
+- Preconditions and constraints
+
+**3. Outputs & Effects**
+- Return values
+- State/storage writes
+- Events/messages
+- External interactions
+
+**4. Block-by-Block Analysis**
+
+For each logical block, document:
+
+<AccordionGroup>
+  <Accordion title="What it does">
+    Describe the operation performed by this code block
+  </Accordion>
+  <Accordion title="Why it appears here">
+    Explain the ordering logic and dependencies
+  </Accordion>
+  <Accordion title="Assumptions">
+    List preconditions this block relies on
+  </Accordion>
+  <Accordion title="Invariants">
+    Identify what this block establishes or maintains
+  </Accordion>
+  <Accordion title="Dependencies">
+    Note what later logic depends on this block
+  </Accordion>
+</AccordionGroup>
+
+Apply to each block:
+- **First Principles** - Understand from fundamental concepts
+- **5 Whys** - Recursively ask why until reaching root purpose
+- **5 Hows** - Recursively ask how until understanding implementation
+
+### Cross-Function Flow Analysis
+
+When encountering calls, continue the same micro-first analysis across boundaries:
+
+**Internal Calls:**
+- Jump into the callee immediately
+- Perform block-by-block analysis of relevant code
+- Track flow of data, assumptions, and invariants: caller → callee → return → caller
+- Note if callee logic behaves differently in this specific call context
+
+**External Calls - Case A (Code Available):**
+- Treat as internal call
+- Jump into the target contract/function
+- Continue block-by-block micro-analysis
+- Propagate invariants and assumptions seamlessly
+
+**External Calls - Case B (Black Box):**
+- Describe payload/value/gas or parameters sent
+- Identify assumptions about the target
+- Consider all outcomes: revert, incorrect return values, unexpected state changes, misbehavior, reentrancy
+
+<Note>
+**Continuity Rule:** Treat the entire call chain as one continuous execution flow. Never reset context. All invariants, assumptions, and data dependencies must propagate across calls.
+</Note>
+
+### Output Quality Requirements
+
+Analysis must meet these minimum thresholds:
+
+- **3 invariants** documented per function
+- **5 assumptions** explicitly stated
+- **3 risk considerations** for external interactions
+- **1 First Principles** application
+- **3 combined 5 Whys/5 Hows** applications
+
+## Phase 3: Global System Understanding
+
+After sufficient micro-analysis, synthesize global understanding:
+
+### 1. State & Invariant Reconstruction
+- Map reads/writes of each state variable
+- Derive multi-function and multi-module invariants
+
+### 2. Workflow Reconstruction
+- Identify end-to-end flows (deposit, withdraw, lifecycle, upgrades)
+- Track how state transforms across these flows
+- Record assumptions that persist across steps
+
+### 3. Trust Boundary Mapping
+- Actor → entrypoint → behavior
+- Identify untrusted input paths
+- Privilege changes and implicit role expectations
+
+### 4. Complexity & Fragility Clustering
+- Functions with many assumptions
+- High branching logic
+- Multi-step dependencies
+- Coupled state changes across modules
+
+These clusters guide the subsequent vulnerability-hunting phase.
+
+## Anti-Hallucination Rules
+
+<Warning>
+The following rules enforce evidence-based analysis and prevent false assumptions:
+</Warning>
+
+| Rule | How to Apply |
+|------|--------------|
+| **Never reshape evidence** | When contradicted, update the model and state the correction explicitly |
+| **Periodically anchor key facts** | Summarize core invariants, state relationships, actor roles, and workflows |
+| **Avoid vague guesses** | Use "Unclear; need to inspect X" instead of "It probably..." |
+| **Cross-reference constantly** | Connect new insights to previous state, flows, and invariants |
+
+## Rationalizations to Reject
+
+<AccordionGroup>
+  <Accordion title='"I get the gist"'>
+    **Why it's wrong:** Gist-level understanding misses edge cases  
+    **Required action:** Line-by-line analysis required
+  </Accordion>
+  <Accordion title='"This function is simple"'>
+    **Why it's wrong:** Simple functions compose into complex bugs  
+    **Required action:** Apply 5 Whys anyway
+  </Accordion>
+  <Accordion title="I'll remember this invariant">
+    **Why it's wrong:** You won't. Context degrades.  
+    **Required action:** Write it down explicitly
+  </Accordion>
+  <Accordion title='"External call is probably fine"'>
+    **Why it's wrong:** External = adversarial until proven otherwise  
+    **Required action:** Jump into code or model as hostile
+  </Accordion>
+  <Accordion title='"I can skip this helper"'>
+    **Why it's wrong:** Helpers contain assumptions that propagate  
+    **Required action:** Trace the full call chain
+  </Accordion>
+  <Accordion title='"This is taking too long"'>
+    **Why it's wrong:** Rushed context = hallucinated vulnerabilities later  
+    **Required action:** Slow is fast
+  </Accordion>
+</AccordionGroup>
+
+## Example: Function Micro-Analysis
+
+Here's how to apply the microstructure checklist to a DEX swap function:
+
+```solidity
+function swap(uint256 amountIn, uint256 minAmountOut) external {
+    require(amountIn > 0, "Zero input");
+    
+    uint256 amountOut = calculateOutput(amountIn);
+    require(amountOut >= minAmountOut, "Slippage");
+    
+    tokenIn.transferFrom(msg.sender, address(this), amountIn);
+    tokenOut.transfer(msg.sender, amountOut);
+}
+```
+
+**Purpose:**
+- Enables token exchange by accepting input tokens and sending output tokens
+- Protects users from excessive slippage via minimum output requirement
+
+**Inputs & Assumptions:**
+- `amountIn`: User-provided input amount (assumed > 0 after validation)
+- `minAmountOut`: User's slippage tolerance
+- Implicit: `msg.sender` has approved `amountIn` tokens
+- Implicit: Contract holds sufficient `tokenOut` balance
+
+**Block-by-Block Analysis:**
+
+**Block 1:** `require(amountIn > 0, "Zero input");`
+- **What:** Validates positive input amount
+- **Why here:** Must validate before expensive calculations
+- **Assumptions:** Zero amounts would cause issues in pricing math
+- **Invariants:** All code after this point knows `amountIn > 0`
+- **First Principles:** Zero-value exchanges are economically meaningless
+
+**Block 2:** `uint256 amountOut = calculateOutput(amountIn);`
+- **What:** Computes exchange rate and output amount
+- **Why here:** Need output before slippage check
+- **Dependencies:** Relies on `amountIn > 0` invariant
+- **5 Whys:** Why calculate here? → To check slippage → To protect user → To prevent MEV/frontrunning → To maintain trust
+- **External call analysis:** Jump into `calculateOutput()` to verify pricing logic and manipulation resistance
+
+**Block 3:** `require(amountOut >= minAmountOut, "Slippage");`
+- **What:** Enforces user's slippage tolerance
+- **Assumptions:** User calculated `minAmountOut` based on recent price
+- **Invariants:** Trade executes only if favorable to user
+- **Risk:** User may set `minAmountOut = 0`, accepting infinite slippage
+
+**Blocks 4-5:** Token transfers
+- **What:** Execute the exchange
+- **Why this order:** Input before output prevents reentrancy exploitation
+- **External calls:** Both are ERC20 external calls
+  - `transferFrom`: Attacker could implement malicious ERC20
+  - `transfer`: Output token could reenter if it's the input token
+- **Assumptions:** ERC20 implementation is not malicious
+- **Risk:** Non-standard ERC20s may return false instead of reverting
+
+**Cross-Function Dependencies:**
+- Calls: `calculateOutput()` - must trace pricing logic
+- Shared state: Token balances modified
+- Trust boundaries: User input → pricing → external token contracts
+
+## Subagent Usage
+
+Claude may spawn the **`function-analyzer`** subagent for:
+
+- Dense or complex functions
+- Long data-flow or control-flow chains
+- Cryptographic / mathematical logic
+- Complex state machines
+- Multi-module workflow reconstruction
+
+The subagent follows the same microstructure checklist, quality thresholds, and pure-context-building constraint.
+
+## Integration with Other Skills
+
+This skill runs **before**:
+- Vulnerability discovery
+- Classification / triage
+- Report writing
+- Impact modeling
+- Exploit reasoning
+
+**Works well with:**
+- **differential-review** - Uses context-building for baseline analysis in Phase 4
+- **fp-check** - Deep context helps distinguish true from false positives
+- **issue-writer** - Write up findings after context is built
+
+## Related Skills
+
+- [Differential Review](/plugins/differential-review) - Security-focused PR review using context-building
+- [FP Check](/plugins/fp-check) - Systematic false positive verification

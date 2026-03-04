@@ -1,0 +1,372 @@
+---
+title: Git Cleanup
+description: Safely analyze and clean up local git branches and worktrees
+icon: broom
+---
+
+<Info>
+Safely clean up accumulated git worktrees and local branches by categorizing them as merged, squash-merged, superseded, or active work. Requires explicit user confirmation before any deletions.
+</Info>
+
+## Overview
+
+The Git Cleanup skill analyzes your local git repository and categorizes branches/worktrees into safe-to-delete, needs-review, and keep categories. It uses a **gated workflow** requiring explicit user confirmation before any deletions.
+
+**Author:** Henrik Brodin
+
+## When to Use
+
+Invoke with `/git-cleanup` when:
+
+- You have accumulated many local branches and worktrees
+- Branches have been merged but not cleaned up locally
+- Remote branches have been deleted but local tracking branches remain
+- You want to identify which branches are safe to delete
+
+<Warning>
+**Important:** This skill only runs when explicitly invoked. It will never suggest cleanup proactively or run automatically.
+</Warning>
+
+## Categories
+
+Branches and worktrees are categorized as:
+
+<CardGroup cols={2}>
+  <Card title="Safe to Delete" icon="circle-check">
+    Branches fully merged into the default branch. Uses safe delete (`git branch -d`).
+  </Card>
+  
+  <Card title="Squash-Merged" icon="code-merge">
+    Work incorporated via squash merge (git can't detect). Uses force delete (`git branch -D`).
+  </Card>
+  
+  <Card title="Superseded" icon="layer-group">
+    Part of a related branch group, work verified in main via PR or in newer branch. Uses force delete (`git branch -D`).
+  </Card>
+  
+  <Card title="Needs Review" icon="flag">
+    Branches with deleted remotes (`[gone]`) where work NOT found in main. Manual review required.
+  </Card>
+  
+  <Card title="Active Work" icon="code">
+    Branches with unpushed commits or untracked local branches. Keep these.
+  </Card>
+</CardGroup>
+
+## Safety Features
+
+<Accordion title="Two Confirmation Gates">
+1. **Analysis Review** - User reviews categorization before proceeding
+2. **Deletion Confirmation** - User confirms exact commands before execution
+</Accordion>
+
+<Accordion title="Safe Delete Preference">
+Uses `git branch -d` (safe delete) for merged branches. Only uses `git branch -D` (force delete) for squash-merged branches where git cannot detect the merge.
+</Accordion>
+
+<Accordion title="Uncommitted Changes Detection">
+Blocks removal of worktrees with uncommitted changes. Shows clear warnings about data loss.
+</Accordion>
+
+<Accordion title="Protected Branches">
+Never touches protected branches: `main`, `master`, `develop`, `release/*`
+</Accordion>
+
+<Accordion title="Gone Branch Review">
+Flags `[gone]` branches (remote deleted) for review instead of auto-deleting. May have local-only work.
+</Accordion>
+
+## Installation
+
+```bash
+/plugin install trailofbits/skills/plugins/git-cleanup
+```
+
+## Usage Example
+
+<Steps>
+  <Step title="Invoke the Skill">
+    ```text
+    /git-cleanup
+    ```
+  </Step>
+  
+  <Step title="Claude Analyzes Repository">
+    Claude runs comprehensive analysis:
+    - Lists all local branches with tracking info
+    - Identifies merged branches
+    - Checks recent PR merge history
+    - Groups related branches by prefix
+    - Detects squash-merged branches
+    - Checks for uncommitted changes in worktrees
+  </Step>
+  
+  <Step title="Review Categorized Results">
+    Claude presents categorized tables:
+    
+    ```markdown
+    ## Git Cleanup Analysis
+    
+    ### Related Branch Groups
+    
+    **Group: feature/api-* (4 branches)**
+    | Branch | Status | Evidence |
+    |--------|--------|----------|
+    | feature/api | Superseded | Work merged in PR #29 |
+    | feature/api-v2 | Superseded | Work merged in PR #45 |
+    
+    Recommendation: Delete all 4 (work is in main)
+    
+    ### Safe to Delete (merged with -d)
+    | Branch | Merged Into |
+    |--------|-------------|
+    | fix/typo | main |
+    
+    ### Safe to Delete (squash-merged, requires -D)
+    | Branch | Merged As |
+    |--------|----------|
+    | feature/login | PR #42 |
+    
+    ### Needs Review ([gone] remotes, no PR found)
+    | Branch | Last Commit |
+    |--------|-------------|
+    | experiment/old | abc1234 "WIP something" |
+    
+    ### Keep (active work)
+    | Branch | Status |
+    |--------|--------|
+    | wip/new-feature | 5 unpushed commits |
+    
+    Which would you like to clean up?
+    ```
+  </Step>
+  
+  <Step title="Choose What to Delete">
+    ```text
+    Delete all recommended (groups + merged + squash-merged)
+    ```
+  </Step>
+  
+  <Step title="Confirm Exact Commands">
+    Claude shows exact commands:
+    
+    ```markdown
+    I will execute:
+    
+    # Merged branches (safe delete)
+    git branch -d fix/typo
+    
+    # Squash-merged branches (force delete - work is in main via PRs)
+    git branch -D feature/login
+    git branch -D feature/api
+    git branch -D feature/api-v2
+    
+    Confirm? (yes/no)
+    ```
+  </Step>
+  
+  <Step title="Execute Deletions">
+    ```text
+    yes
+    ```
+    
+    Claude runs each deletion separately and reports results.
+  </Step>
+</Steps>
+
+## Workflow Details
+
+### Phase 1: Comprehensive Analysis
+
+Claude gathers ALL information upfront:
+
+```bash
+# Get default branch name
+default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main")
+
+# List all local branches with tracking info
+git branch -vv
+
+# List all worktrees
+git worktree list
+
+# Fetch and prune to sync remote state
+git fetch --prune
+
+# Get merged branches
+git branch --merged "$default_branch"
+
+# Get recent PR merge history
+git log --oneline "$default_branch" | grep -iE "#[0-9]+" | head -30
+```
+
+### Phase 2: Group Related Branches
+
+**Before individual categorization**, identify branch groups by shared prefixes:
+
+```bash
+# Example: feature/api, feature/api-v2, feature/api-refactor
+```
+
+For each group:
+1. **Compare commit histories** - Which branches contain commits from others?
+2. **Find merge evidence** - Which PRs incorporated work from this group?
+3. **Identify the "final" branch** - Usually most recent or most complete
+4. **Mark superseded branches** - Older iterations whose work is in main or newer branch
+
+<Note>
+**SUPERSEDED requires evidence**, not just shared prefix:
+- A PR merged the work into main, OR
+- A newer branch contains all commits from the older branch
+
+Name prefix alone is NOT sufficient.
+</Note>
+
+### Phase 3: Categorize Remaining Branches
+
+For branches NOT in a related group:
+
+```text
+Is branch merged into default branch?
+├─ YES → SAFE_TO_DELETE (use -d)
+└─ NO → Is tracking a remote?
+        ├─ YES → Remote deleted? ([gone])
+        │        ├─ YES → Was work squash-merged? (check main for PR)
+        │        │        ├─ YES → SQUASH_MERGED (use -D)
+        │        │        └─ NO → REMOTE_GONE (needs review)
+        │        └─ NO → Has unpushed commits?
+        │                ├─ YES → UNPUSHED_WORK (keep)
+        │                └─ NO → SYNCED_WITH_REMOTE (keep)
+        └─ NO → Has unique commits?
+                ├─ YES → LOCAL_WORK (keep)
+                └─ NO → SAFE_TO_DELETE (use -d)
+```
+
+### Phase 4: Dirty State Detection
+
+Check ALL worktrees for uncommitted changes:
+
+```bash
+# For each worktree path
+git -C <worktree-path> status --porcelain
+```
+
+**Display warnings prominently:**
+
+```markdown
+WARNING: ../proj-auth has uncommitted changes:
+  M  src/auth.js
+  ?? new-file.txt
+
+These changes will be LOST if you remove this worktree.
+```
+
+## Squash-Merged Branches
+
+<Warning>
+**IMPORTANT:** `git branch -d` will ALWAYS fail for squash-merged branches because git cannot detect that the work was incorporated.
+</Warning>
+
+When Claude identifies a branch as squash-merged:
+- Plans to use `git branch -D` (force delete) from the start
+- Does NOT try `git branch -d` first
+- Shows `git branch -D` in the confirmation step
+- This is expected behavior, not an error
+
+Squash-merged detection:
+```bash
+# Search default branch for PRs that incorporated this work
+git log --oneline "$default_branch" | grep -iE "(branch-name|#[0-9]+)"
+```
+
+## Safety Rules
+
+<Checklist>
+  - [ ] Only runs when user explicitly uses `/git-cleanup`
+  - [ ] Two confirmation gates (analysis review, then deletion confirmation)
+  - [ ] Uses `-d` for merged, `-D` only for squash-merged/superseded
+  - [ ] Never touches protected branches (main, master, develop, release/*)
+  - [ ] Blocks dirty worktree removal without data loss acknowledgment
+  - [ ] Groups related branches together (not scattered across categories)
+  - [ ] Each deletion runs separately (partial failures don't block remaining)
+</Checklist>
+
+## Example Output
+
+```markdown
+## Git Cleanup Analysis
+
+### Related Branch Groups
+
+**Group: feature/auth-* (3 branches)**
+| Branch | Status | Evidence |
+|--------|--------|----------|
+| feature/auth-initial | Superseded | Work merged in PR #15 |
+| feature/auth-improvements | Superseded | Work merged in PR #23 |
+| feature/auth-final | Superseded | Work merged in PR #29 |
+
+Recommendation: Delete all 3 (work is in main)
+
+---
+
+### Individual Branches
+
+**Safe to Delete (merged with -d)**
+| Branch | Merged Into |
+|--------|-------------|
+| bugfix/header-spacing | main |
+| docs/update-readme | main |
+
+**Safe to Delete (squash-merged, requires -D)**
+| Branch | Merged As |
+|--------|----------|
+| feature/dashboard | PR #34 |
+
+**Needs Review ([gone] remotes, no PR found)**
+| Branch | Last Commit |
+|--------|-------------|
+| experiment/new-layout | def5678 "trying grid layout" |
+
+**Keep (active work)**
+| Branch | Status |
+|--------|--------|
+| feature/notifications | 12 unpushed commits |
+| main | current branch |
+
+### Worktrees
+| Path | Branch | Status |
+|------|--------|--------|
+| ../myproject-dashboard | feature/dashboard | STALE (merged) |
+
+---
+
+**Summary:**
+- 3 related branches (feature/auth-*) - recommend delete all
+- 2 merged branches - safe to delete
+- 1 squash-merged branch - safe to delete
+- 1 needs review
+- 2 to keep
+- 1 worktree to remove
+
+Which would you like to clean up?
+```
+
+## Rationalizations to Reject
+
+<Warning>
+The skill teaches Claude to reject these shortcuts:
+
+| Rationalization | Why It's Wrong |
+|-----------------|----------------|
+| "The branch is old, so it's probably safe to delete" | Age doesn't indicate merge status. Old branches may contain unmerged work. |
+| "I can recover from reflog if needed" | Reflog entries expire. Users often don't know how to use reflog. |
+| "It's just a local branch, nothing important" | Local branches may contain the only copy of work not pushed anywhere. |
+| "The PR was merged, so the branch is safe" | Squash merges don't preserve branch history. Verify specific commits were incorporated. |
+| "I'll delete all `[gone]` branches" | `[gone]` only means remote deleted. Local branch may have unpushed commits. |
+</Warning>
+
+## Related Skills
+
+- **GH CLI** - Works alongside for GitHub PR/issue management
+- **Ask Questions If Underspecified** - Uses similar confirmation gate pattern
+- **Second Opinion** - Can review branch diffs before cleanup

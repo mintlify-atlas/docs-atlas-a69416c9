@@ -1,0 +1,255 @@
+---
+title: Claude in Chrome Troubleshooting
+description: Diagnose and fix Claude in Chrome MCP extension connectivity issues
+icon: wrench
+---
+
+<Tip>
+**Original Author:** [@jeffzwang](https://github.com/jeffzwang) from [@ExaAILabs](https://github.com/ExaAILabs)
+
+**Enhanced by:** Trail of Bits
+</Tip>
+
+## Overview
+
+Diagnose and fix Claude in Chrome MCP extension connectivity issues. This plugin provides systematic troubleshooting for browser automation failures, focusing on the primary conflict between Claude.app (Cowork) and Claude Code native messaging hosts.
+
+## When to Use
+
+<CardGroup cols={2}>
+  <Card title="Connection Failures" icon="link-slash">
+    `mcp__claude-in-chrome__*` tools fail with "Browser extension is not connected"
+  </Card>
+  <Card title="Erratic Behavior" icon="shuffle">
+    Browser automation works inconsistently or times out
+  </Card>
+  <Card title="After Updates" icon="rotate">
+    Problems appear after updating Claude Code or Claude.app
+  </Card>
+  <Card title="Switching Contexts" icon="arrows-left-right">
+    Issues when switching between Claude Code CLI and Claude.app (Cowork)
+  </Card>
+</CardGroup>
+
+## The Core Issue
+
+When Claude.app added Cowork support (browser automation from the desktop app), it introduced a competing native messaging host that conflicts with Claude Code CLI.
+
+### Two Native Hosts, Two Socket Formats
+
+| Component | Native Host Binary | Socket Location |
+|-----------|-------------------|------------------|
+| **Claude.app (Cowork)** | `/Applications/Claude.app/Contents/Helpers/chrome-native-host` | `/tmp/claude-mcp-browser-bridge-$USER/<PID>.sock` |
+| **Claude Code CLI** | `~/.local/share/claude/versions/<version> --chrome-native-host` | `$TMPDIR/claude-mcp-browser-bridge-$USER` (single file) |
+
+### Why They Conflict
+
+<Steps>
+  <Step title="Both Register Configs">
+    Both register native messaging configs in Chrome:
+    - `com.anthropic.claude_browser_extension.json` → Claude.app helper
+    - `com.anthropic.claude_code_browser_extension.json` → Claude Code wrapper
+  </Step>
+  <Step title="Chrome Requests Host">
+    Chrome extension requests a native host by name
+  </Step>
+  <Step title="Wrong Binary Runs">
+    If the wrong config is active, the wrong binary runs
+  </Step>
+  <Step title="Incompatible Sockets">
+    The wrong binary creates sockets in a format/location the MCP client doesn't expect
+  </Step>
+  <Step title="Connection Fails">
+    Result: "Browser extension is not connected" even though everything appears to be running
+  </Step>
+</Steps>
+
+## Quick Fix
+
+<Warning>
+You cannot use both Claude.app (Cowork) and Claude Code CLI simultaneously. Pick one and disable the other.
+</Warning>
+
+<Tabs>
+  <Tab title="For Claude Code CLI">
+    ```bash
+    # Disable the Claude.app native messaging config
+    mv ~/Library/Application\ Support/Google/Chrome/NativeMessagingHosts/com.anthropic.claude_browser_extension.json \
+       ~/Library/Application\ Support/Google/Chrome/NativeMessagingHosts/com.anthropic.claude_browser_extension.json.disabled
+
+    # Verify Claude Code config exists
+    cat ~/Library/Application\ Support/Google/Chrome/NativeMessagingHosts/com.anthropic.claude_code_browser_extension.json
+    ```
+  </Tab>
+  <Tab title="For Claude.app (Cowork)">
+    ```bash
+    # Disable the Claude Code native messaging config
+    mv ~/Library/Application\ Support/Google/Chrome/NativeMessagingHosts/com.anthropic.claude_code_browser_extension.json \
+       ~/Library/Application\ Support/Google/Chrome/NativeMessagingHosts/com.anthropic.claude_code_browser_extension.json.disabled
+    ```
+  </Tab>
+</Tabs>
+
+## Toggle Script
+
+Add this to `~/.zshrc` to easily switch between Claude.app and Claude Code:
+
+```bash
+chrome-mcp-toggle() {
+    local CONFIG_DIR=~/Library/Application\ Support/Google/Chrome/NativeMessagingHosts
+    local CLAUDE_APP="$CONFIG_DIR/com.anthropic.claude_browser_extension.json"
+    local CLAUDE_CODE="$CONFIG_DIR/com.anthropic.claude_code_browser_extension.json"
+
+    if [[ -f "$CLAUDE_APP" && ! -f "$CLAUDE_APP.disabled" ]]; then
+        # Currently using Claude.app, switch to Claude Code
+        mv "$CLAUDE_APP" "$CLAUDE_APP.disabled"
+        [[ -f "$CLAUDE_CODE.disabled" ]] && mv "$CLAUDE_CODE.disabled" "$CLAUDE_CODE"
+        echo "Switched to Claude Code CLI"
+        echo "Restart Chrome and Claude Code to apply"
+    elif [[ -f "$CLAUDE_CODE" && ! -f "$CLAUDE_CODE.disabled" ]]; then
+        # Currently using Claude Code, switch to Claude.app
+        mv "$CLAUDE_CODE" "$CLAUDE_CODE.disabled"
+        [[ -f "$CLAUDE_APP.disabled" ]] && mv "$CLAUDE_APP.disabled" "$CLAUDE_APP"
+        echo "Switched to Claude.app (Cowork)"
+        echo "Restart Chrome to apply"
+    else
+        echo "Current state unclear. Check configs:"
+        ls -la "$CONFIG_DIR"/com.anthropic*.json* 2>/dev/null
+    fi
+}
+```
+
+Usage: `chrome-mcp-toggle` then restart Chrome (and Claude Code if switching to CLI).
+
+## Quick Diagnosis
+
+```bash
+# 1. Which native host binary is running?
+ps aux | grep chrome-native-host | grep -v grep
+# Claude.app: /Applications/Claude.app/Contents/Helpers/chrome-native-host
+# Claude Code: ~/.local/share/claude/versions/X.X.X --chrome-native-host
+
+# 2. Where is the socket? (Claude Code)
+ls -la "$(getconf DARWIN_USER_TEMP_DIR)/claude-mcp-browser-bridge-$USER" 2>&1
+
+# 2. Where is the socket? (Claude.app)
+ls -la /tmp/claude-mcp-browser-bridge-$USER/ 2>&1
+
+# 3. What's the native host connected to?
+lsof -U 2>&1 | grep claude-mcp-browser-bridge
+
+# 4. Which configs are active?
+ls ~/Library/Application\ Support/Google/Chrome/NativeMessagingHosts/com.anthropic*.json
+```
+
+## Full Reset Procedure
+
+<Info>
+**Critical Insight:** MCP connects at startup. If the browser bridge wasn't ready when Claude Code started, the connection will fail for the entire session. The fix is usually: ensure Chrome + extension are running with correct config, THEN restart Claude Code.
+</Info>
+
+<Steps>
+  <Step title="Ensure Correct Config">
+    ```bash
+    mv ~/Library/Application\ Support/Google/Chrome/NativeMessagingHosts/com.anthropic.claude_browser_extension.json \
+       ~/Library/Application\ Support/Google/Chrome/NativeMessagingHosts/com.anthropic.claude_browser_extension.json.disabled 2>/dev/null
+    ```
+  </Step>
+  <Step title="Update Wrapper">
+    ```bash
+    cat > ~/.claude/chrome/chrome-native-host << 'EOF'
+#!/bin/bash
+LATEST=$(ls -t ~/.local/share/claude/versions/ 2>/dev/null | head -1)
+exec "$HOME/.local/share/claude/versions/$LATEST" --chrome-native-host
+EOF
+    chmod +x ~/.claude/chrome/chrome-native-host
+    ```
+  </Step>
+  <Step title="Clean Up">
+    ```bash
+    pkill -f chrome-native-host
+    rm -rf /tmp/claude-mcp-browser-bridge-$USER/
+    rm -f "$(getconf DARWIN_USER_TEMP_DIR)/claude-mcp-browser-bridge-$USER"
+    ```
+  </Step>
+  <Step title="Restart Chrome">
+    ```bash
+    osascript -e 'quit app "Google Chrome"' && sleep 2 && open -a "Google Chrome"
+    ```
+  </Step>
+  <Step title="Wait and Click Extension">
+    Wait for Chrome to fully load, then click the Claude extension icon
+  </Step>
+  <Step title="Verify Native Host">
+    ```bash
+    ps aux | grep chrome-native-host | grep -v grep
+    # Should show: ~/.local/share/claude/versions/X.X.X --chrome-native-host
+    ```
+  </Step>
+  <Step title="Verify Socket">
+    ```bash
+    ls -la "$(getconf DARWIN_USER_TEMP_DIR)/claude-mcp-browser-bridge-$USER"
+    ```
+  </Step>
+  <Step title="Restart Claude Code">
+    Now restart your Claude Code session
+  </Step>
+</Steps>
+
+## Other Common Issues
+
+<AccordionGroup>
+  <Accordion title="Multiple Chrome Profiles">
+    If you have the Claude extension installed in multiple Chrome profiles, each spawns its own native host and socket, causing confusion.
+
+    **Fix:** Only enable the Claude extension in ONE Chrome profile.
+  </Accordion>
+
+  <Accordion title="Multiple Claude Code Sessions">
+    Running multiple Claude Code instances can cause socket conflicts.
+
+    **Fix:** Only run one Claude Code session at a time, or use `/mcp` to reconnect after closing other sessions.
+  </Accordion>
+
+  <Accordion title="Hardcoded Version in Wrapper">
+    The wrapper at `~/.claude/chrome/chrome-native-host` may have a hardcoded version that becomes stale after updates.
+
+    **Diagnosis:**
+    ```bash
+    cat ~/.claude/chrome/chrome-native-host
+    # Bad: exec "/Users/.../.local/share/claude/versions/2.0.76" --chrome-native-host
+    # Good: Uses $(ls -t ...) to find latest
+    ```
+
+    **Fix:** Use the dynamic version wrapper shown in the Full Reset Procedure above.
+  </Accordion>
+
+  <Accordion title="TMPDIR Not Set">
+    Claude Code expects `TMPDIR` to be set to find the socket.
+
+    ```bash
+    # Check
+    echo $TMPDIR
+    # Should show: /var/folders/XX/.../T/
+
+    # Fix: Add to ~/.zshrc
+    export TMPDIR="${TMPDIR:-$(getconf DARWIN_USER_TEMP_DIR)}"
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Installation
+
+```bash
+/plugin install trailofbits/skills/plugins/claude-in-chrome-troubleshooting
+```
+
+## Platform Support
+
+<Warning>
+This plugin is macOS-specific and covers paths and tools like `~/Library/Application Support/` and `osascript`. It does not support Linux or Windows.
+</Warning>
+
+## License
+
+This work is licensed under a [Creative Commons Attribution-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-sa/4.0/).

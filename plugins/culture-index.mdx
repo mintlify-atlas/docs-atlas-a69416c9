@@ -1,0 +1,347 @@
+---
+title: Culture Index
+description: Interpret Culture Index survey results for individuals and teams
+icon: users
+---
+
+<Info>
+**Author:** Dan Guido (Trail of Bits)
+</Info>
+
+## Overview
+
+Interprets Culture Index survey results for individuals and teams. Provides expert interpretation of behavioral assessments, team composition analysis, burnout detection, and hiring profile recommendations.
+
+## When to Use
+
+<CardGroup cols={2}>
+  <Card title="Individual Profiles" icon="user">
+    Interpret an individual's Culture Index profile and understand their traits
+  </Card>
+  <Card title="Team Analysis" icon="users">
+    Analyze team composition for gas/brake/glue balance and identify gaps
+  </Card>
+  <Card title="Burnout Detection" icon="triangle-exclamation">
+    Detect burnout signals by comparing Survey vs Job traits
+  </Card>
+  <Card title="Profile Comparison" icon="code-compare">
+    Compare multiple profiles for compatibility and collaboration dynamics
+  </Card>
+  <Card title="Hiring Profiles" icon="user-plus">
+    Define ideal CI traits for a role and identify acceptable patterns
+  </Card>
+  <Card title="Manager Coaching" icon="chalkboard-user">
+    Help managers adjust their style for specific direct reports
+  </Card>
+  <Card title="Interview Analysis" icon="comments">
+    Predict CI traits from interview transcripts before survey
+  </Card>
+  <Card title="Conflict Mediation" icon="handshake">
+    Understand and address friction between team members
+  </Card>
+</CardGroup>
+
+## Key Concepts
+
+### Trait Colors
+
+| Trait | Color | Measures |
+|-------|-------|----------|
+| **A** | Maroon | Autonomy, initiative, self-confidence |
+| **B** | Yellow | Social ability, need for interaction |
+| **C** | Blue | Pace/Patience, urgency level |
+| **D** | Green | Conformity, attention to detail |
+| **L** | Purple | Logic, emotional processing |
+| **I** | Cyan | Ingenuity, inventiveness |
+
+### Essential Principles
+
+<Warning>
+**Culture Index measures behavioral traits, not intelligence or skills. There is no "good" or "bad" profile.**
+</Warning>
+
+<AccordionGroup>
+  <Accordion title="Never Compare Absolute Values">
+    **Never compare absolute trait values between people.**
+
+    The 0-10 scale is just a ruler. What matters is **distance from the red arrow** (population mean at 50th percentile). The arrow position varies between surveys based on EU.
+
+    **Wrong**: "Dan has higher autonomy than Jim because his A is 8 vs 5"
+
+    **Right**: "Dan is +3 centiles from his arrow; Jim is +1 from his arrow"
+
+    Always ask: Where is the arrow, and how far is the dot from it?
+  </Accordion>
+
+  <Accordion title="Survey vs Job">
+    **Survey = who you ARE. Job = who you're TRYING TO BE.**
+
+    > **"You can't send a duck to Eagle school."** Traits are hardwired—you can only modify behaviors temporarily, at the cost of energy.
+
+    - **Top graph (Survey Traits)**: Hardwired by age 12-16. Does not change. Writing with your dominant hand.
+    - **Bottom graph (Job Behaviors)**: Adaptive behavior at work. Can change. Writing with your non-dominant hand.
+
+    Large differences between graphs indicate behavior modification, which drains energy and causes burnout if sustained 3-6+ months.
+  </Accordion>
+
+  <Accordion title="Distance Interpretation">
+    **Distance from arrow determines trait strength.**
+
+    | Distance | Label | Percentile | Interpretation |
+    |----------|-------|------------|----------------|
+    | On arrow | Normative | 50th | Flexible, situational |
+    | ±1 centile | Tendency | ~67th | Easier to modify |
+    | ±2 centiles | Pronounced | ~84th | Noticeable difference |
+    | ±4+ centiles | Extreme | ~98th | Hardwired, compulsive, predictable |
+
+    **Key insight:** Every 2 centiles of distance = 1 standard deviation.
+
+    Extreme traits drive extreme results but are harder to modify and less relatable to average people.
+  </Accordion>
+
+  <Accordion title="L and I Exception">
+    **L (Logic) and I (Ingenuity) use absolute values.**
+
+    Unlike A, B, C, D, you CAN compare L and I scores directly between people:
+    - Logic 8 means "High Logic" regardless of arrow position
+    - Ingenuity 2 means "Low Ingenuity" for anyone
+
+    Only these two traits break the "no absolute comparison" rule.
+  </Accordion>
+</AccordionGroup>
+
+### Energy Utilization
+
+<Tip>
+**Formula:**
+```
+Utilization = (Job EU / Survey EU) × 100
+
+70-130% = Healthy
+>130% = STRESS (burnout risk)
+<70% = FRUSTRATION (flight risk)
+```
+</Tip>
+
+Energy Utilization measures how much energy someone is spending to adapt their behavior at work. High utilization (>130%) indicates they're working against their natural traits and are at risk of burnout.
+
+### Gas/Brake/Glue Framework
+
+| Role | Trait | Function |
+|------|-------|----------|
+| **Gas** | High A | Growth, risk-taking, driving results |
+| **Brake** | High D | Quality control, risk aversion, finishing |
+| **Glue** | High B | Relationships, morale, culture |
+
+<Info>
+Healthy teams need balance across all three roles. Too much gas without brakes leads to reckless execution. Too many brakes without gas leads to paralysis. No glue leads to poor morale and turnover.
+</Info>
+
+## Input Formats
+
+<Tabs>
+  <Tab title="JSON (Recommended)">
+    Extracted profiles from culture-index tool provide the most accurate data:
+
+    ```json
+    {
+      "name": "Person Name",
+      "archetype": "Architect",
+      "survey": {
+        "eu": 21,
+        "arrow": 2.3,
+        "a": [5, 2.7],
+        "b": [0, -2.3],
+        "c": [1, -1.3],
+        "d": [3, 0.7],
+        "logic": [5, null],
+        "ingenuity": [2, null]
+      },
+      "job": { "..." : "same structure as survey" },
+      "analysis": {
+        "energy_utilization": 148,
+        "status": "stress"
+      }
+    }
+    ```
+
+    Trait values are `[absolute, relative_to_arrow]` tuples. Use the relative value for interpretation.
+  </Tab>
+  <Tab title="PDF">
+    <Warning>
+    **NEVER use visual estimation for trait values.** Visual estimation has 20-30% error rate.
+    </Warning>
+
+    When given a PDF:
+    1. Check if JSON already exists (same directory as PDF, or ask user)
+    2. If not, run extraction with verification:
+       ```bash
+       uv run {baseDir}/scripts/extract_pdf.py --verify /path/to/file.pdf [output.json]
+       ```
+    3. Visually confirm the verification summary matches the PDF
+    4. Use the extracted JSON for interpretation
+
+    **If uv is not installed:** Stop and instruct user to install it (`brew install uv` or `pip install uv`).
+  </Tab>
+</Tabs>
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="1. Interpret Individual Profile">
+    Understand one person's traits, strengths, and challenges.
+
+    **Workflow:** `workflows/interpret-individual.md`
+
+    **Output:**
+    - Archetype/pattern identification
+    - 2-3 key strengths based on leading traits
+    - 2-3 challenges or development areas
+    - Survey vs Job comparison (if both available)
+    - Actionable recommendations
+  </Accordion>
+
+  <Accordion title="2. Analyze Team Composition">
+    Assess gas/brake/glue balance, identify gaps.
+
+    **Workflow:** `workflows/analyze-team.md`
+
+    **Output:**
+    - Team balance assessment (gas/brake/glue)
+    - Gaps and risks
+    - Recommended hiring profiles to fill gaps
+  </Accordion>
+
+  <Accordion title="3. Detect Burnout Signals">
+    Compare Survey vs Job, calculate EU utilization, flag risk signals.
+
+    **Workflow:** `workflows/detect-burnout.md`
+
+    **Output:**
+    - Energy utilization percentage
+    - Risk level (healthy, stress, frustration)
+    - Specific traits being modified
+    - Recommendations for adjustment
+  </Accordion>
+
+  <Accordion title="4. Compare Multiple Profiles">
+    Understand compatibility, collaboration dynamics.
+
+    **Workflow:** `workflows/compare-profiles.md`
+
+    **Output:**
+    - Complementary traits
+    - Potential friction points
+    - Collaboration recommendations
+  </Accordion>
+
+  <Accordion title="5. Get Motivator Recommendations">
+    Learn how to engage and retain someone.
+
+    **Reference:** `references/motivators.md`
+
+    **Output:**
+    - Engagement strategies by trait
+    - Communication preferences
+    - What to avoid
+  </Accordion>
+
+  <Accordion title="6. Define Hiring Profile">
+    Determine ideal CI traits for a role.
+
+    **Workflow:** `workflows/define-hiring-profile.md`
+
+    **Output:**
+    - Ideal trait ranges
+    - Acceptable patterns/archetypes
+    - Red flag combinations
+  </Accordion>
+
+  <Accordion title="7. Coach Manager on Direct Report">
+    Adjust management style based on both profiles.
+
+    **Workflow:** `workflows/coach-manager.md`
+
+    **Output:**
+    - Management style recommendations
+    - Communication adjustments
+    - Potential friction points to avoid
+  </Accordion>
+
+  <Accordion title="8. Predict Traits from Interview">
+    Analyze interview transcript to estimate CI traits.
+
+    **Workflow:** `workflows/predict-from-interview.md`
+
+    **Output:**
+    - Estimated trait ranges
+    - Confidence levels
+    - Recommended validation via actual survey
+  </Accordion>
+
+  <Accordion title="9. Interview Debrief">
+    Assess candidate fit based on predicted traits.
+
+    **Workflow:** `workflows/interview-debrief.md`
+
+    **Output:**
+    - Fit assessment vs role requirements
+    - Team compatibility prediction
+    - Proceed/pass recommendation with rationale
+  </Accordion>
+
+  <Accordion title="10. Plan Onboarding">
+    Design first 90 days based on new hire and team profiles.
+
+    **Workflow:** `workflows/plan-onboarding.md`
+
+    **Output:**
+    - 30/60/90 day milestones tailored to traits
+    - Communication and support strategies
+    - Integration with existing team
+  </Accordion>
+
+  <Accordion title="11. Mediate Conflict">
+    Understand friction between two people using their profiles.
+
+    **Workflow:** `workflows/mediate-conflict.md`
+
+    **Output:**
+    - Root cause of friction (trait-based)
+    - Perspective translation
+    - Mediation strategies
+  </Accordion>
+</AccordionGroup>
+
+## What It Covers
+
+- **Relative Interpretation** - Always uses distance from arrow, never absolute values
+- **Survey vs Job Analysis** - Identifies behavior modification and energy drain
+- **Pattern Recognition** - Maps profiles to 19 archetypes
+- **Team Analysis** - Assesses gas/brake/glue balance and gaps
+- **Burnout Detection** - Calculates energy utilization and flags risk
+
+## Reference Documents
+
+The plugin includes comprehensive reference materials:
+
+- `primary-traits.md` - A, B, C, D trait details
+- `secondary-traits.md` - EU, L, I trait details
+- `patterns-archetypes.md` - 19 patterns and archetypes
+- `motivators.md` - Engagement strategies by trait
+- `team-composition.md` - Gas/brake/glue framework
+- `anti-patterns.md` - Common interpretation mistakes
+- `conversation-starters.md` - How to engage each pattern and trait type
+- `interview-trait-signals.md` - Signals for predicting traits from interviews
+
+## Installation
+
+```bash
+/plugin install trailofbits/skills/plugins/culture-index
+```
+
+## When NOT to Use
+
+- For non-CI behavioral assessments (DISC, Myers-Briggs, StrengthsFinder, Predictive Index, Enneagram)
+- For clinical psychological assessments or diagnoses
+- As the sole basis for hiring/firing decisions — CI is one data point among many

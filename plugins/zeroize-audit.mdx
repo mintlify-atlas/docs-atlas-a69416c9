@@ -1,0 +1,646 @@
+---
+title: Zeroize Audit
+description: Detect missing or compiler-optimized zeroization with assembly and control-flow analysis
+icon: trash
+---
+
+Audit C/C++/Rust code for missing zeroization of sensitive data and detect compiler-removed memory wiping through assembly-level analysis. Essential for cryptographic implementations and systems handling secrets.
+
+## Overview
+
+The Zeroize Audit plugin performs comprehensive analysis to ensure sensitive data is properly cleared from memory:
+
+- **Source-level detection** - Missing zeroization, partial wipes, incorrect sizes
+- **Compiler optimization analysis** - Dead-store elimination removing security-critical wipes
+- **Assembly verification** - Stack retention and register spills with proof
+- **Control-flow analysis** - Zeroization missing on error paths
+- **Proof-of-concept validation** - Every finding backed by working exploit code
+
+<Warning>
+This plugin requires buildable code with `compile_commands.json` (C/C++) or `Cargo.toml` (Rust) and performs **read-only analysis** - it does not modify your codebase.
+</Warning>
+
+## When to Use
+
+<CardGroup cols={2}>
+  <Card title="Crypto Implementations" icon="key">
+    Keys, seeds, nonces, secrets in cryptographic code
+  </Card>
+  <Card title="Authentication Systems" icon="lock">
+    Passwords, tokens, session data, credentials
+  </Card>
+  <Card title="PII Handling" icon="user-shield">
+    Personal information requiring secure cleanup
+  </Card>
+  <Card title="Security Audits" icon="magnifying-glass">
+    Verifying secure memory handling in security-critical code
+  </Card>
+</CardGroup>
+
+## When NOT to Use
+
+- General code review without security focus
+- Performance optimization (unless related to secure wiping)
+- Refactoring tasks not related to sensitive data
+- Code without identifiable secrets or sensitive values
+
+## Supported Languages
+
+### C/C++
+
+**Requirements:**
+- `compile_commands.json` (generate with CMake or Bear)
+- `clang` on PATH for IR/assembly analysis
+- Buildable translation units
+
+**Generate compile database:**
+
+<CodeGroup>
+```bash CMake
+cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+```
+
+```bash Make + Bear
+bear -- make -j$(nproc)
+```
+</CodeGroup>
+
+### Rust
+
+**Requirements:**
+- `Cargo.toml` in crate root
+- `cargo +nightly` for MIR/LLVM IR emission
+- `uv` for running analysis scripts
+- Crate must pass `cargo check`
+
+**Preflight validation:**
+```bash
+tools/validate_rust_toolchain.sh --manifest Cargo.toml
+```
+
+## Analysis Pipeline
+
+The plugin uses an 11-agent architecture across 8 phases:
+
+<Steps>
+  <Step title="Phase 0: Preflight">
+    Validates toolchain, compile DB, creates working directory, enumerates translation units
+  </Step>
+  
+  <Step title="Phase 1: Source Analysis">
+    **Wave 1:** MCP resolver (C/C++ only, semantic context)
+    
+    **Wave 2a:** Source analyzer (C/C++, parallel)
+    
+    **Wave 2b:** Rust source analyzer (Rustdoc JSON + dangerous APIs, parallel)
+    
+    Produces: `MISSING_SOURCE_ZEROIZE`, `PARTIAL_WIPE`, `SECRET_COPY`, `INSECURE_HEAP_ALLOC`
+  </Step>
+  
+  <Step title="Phase 2: Compiler Analysis">
+    **Wave 3:** Per-TU compiler analyzer (C/C++, N parallel)
+    
+    **Wave 3R:** Rust compiler analyzer (MIR, LLVM IR, assembly)
+    
+    Produces: `OPTIMIZED_AWAY_ZEROIZE`, `STACK_RETENTION`, `REGISTER_SPILL`, `LOOP_UNROLLED_INCOMPLETE`
+  </Step>
+  
+  <Step title="Phase 3: Interim Report">
+    Report assembler collects findings from all agents, applies confidence gates
+  </Step>
+  
+  <Step title="Phase 4: PoC Generation">
+    Generates bespoke proof-of-concept programs for each finding (C/C++ all categories; Rust: MISSING_SOURCE_ZEROIZE, SECRET_COPY, PARTIAL_WIPE)
+  </Step>
+  
+  <Step title="Phase 5: PoC Validation">
+    Compiles and runs PoCs, verifies each proves its claimed vulnerability, presents failures to user
+  </Step>
+  
+  <Step title="Phase 6: Final Report">
+    Merges PoC validation results, produces comprehensive markdown report + structured JSON
+  </Step>
+  
+  <Step title="Phase 7: Test Generation (Optional)">
+    Generates runtime validation test harnesses
+  </Step>
+</Steps>
+
+## Finding Categories
+
+### Source-Level Findings
+
+<AccordionGroup>
+  <Accordion title="MISSING_SOURCE_ZEROIZE" icon="circle-xmark">
+    No zeroization found in source code for sensitive object.
+    
+    **Evidence required:** Source analysis only
+    
+    **PoC support:** Yes (C/C++ + Rust)
+    
+    **Example:**
+    ```c
+    void process_key(uint8_t *key, size_t len) {
+        // ... use key ...
+        return;  // No explicit_bzero or memset_s
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="PARTIAL_WIPE" icon="circle-half-stroke">
+    Zeroization with incorrect size or incomplete coverage.
+    
+    **Evidence required:** Source analysis only
+    
+    **PoC support:** Yes (C/C++ + Rust)
+    
+    **Example:**
+    ```c
+    explicit_bzero(key, 16);  // Key is 32 bytes, only wiped 16
+    ```
+  </Accordion>
+  
+  <Accordion title="SECRET_COPY" icon="copy">
+    Sensitive data copied without zeroization tracking.
+    
+    **Evidence required:** Source + MCP semantic analysis preferred
+    
+    **PoC support:** Yes (C/C++ + Rust)
+    
+    **Example:**
+    ```c
+    uint8_t backup_key[32];
+    memcpy(backup_key, secret_key, 32);  // Copy without cleanup
+    ```
+  </Accordion>
+  
+  <Accordion title="INSECURE_HEAP_ALLOC" icon="memory">
+    Secret uses insecure allocator instead of secure_malloc.
+    
+    **Evidence required:** Source analysis only
+    
+    **PoC support:** Yes (C/C++ only)
+    
+    **Example:**
+    ```c
+    uint8_t *key = malloc(32);  // Should use secure allocator
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Compiler-Level Findings
+
+<AccordionGroup>
+  <Accordion title="OPTIMIZED_AWAY_ZEROIZE" icon="wand-magic-sparkles">
+    Compiler removed zeroization via dead-store elimination.
+    
+    **Evidence required:** IR diff (O0 vs O1/O2) showing wipe removal - **NEVER valid without compiler evidence**
+    
+    **PoC support:** Yes
+    
+    **Example IR evidence:**
+    ```
+    O0: 32 volatile stores targeting key_buf
+    O2: 0 volatile stores (all eliminated by DSE)
+    ```
+  </Accordion>
+  
+  <Accordion title="STACK_RETENTION" icon="layer-group">
+    Stack frame may retain secrets after function return.
+    
+    **Evidence required:** 
+    - C/C++: Assembly showing secret bytes on stack at `ret`
+    - Rust: LLVM IR `alloca` + `lifetime.end` without volatile store; assembly corroboration upgrades to `confirmed`
+    
+    **PoC support:** Yes (C/C++ only)
+    
+    **Example:**
+    ```asm
+    subq $64, %rsp       ; Allocate 64-byte stack frame
+    ; ... use secret ...
+    retq                 ; Return without zeroing stack
+    ```
+  </Accordion>
+  
+  <Accordion title="REGISTER_SPILL" icon="arrow-down-to-line">
+    Secrets spilled from registers to stack without cleanup.
+    
+    **Evidence required:**
+    - C/C++: Assembly showing spill instruction
+    - Rust: LLVM IR load + non-zeroize call; assembly corroboration upgrades to `confirmed`
+    
+    **PoC support:** Yes (C/C++ only)
+    
+    **Example:**
+    ```asm
+    movq %rax, -16(%rsp)  ; Spill secret register to stack
+    ```
+  </Accordion>
+  
+  <Accordion title="MISSING_ON_ERROR_PATH" icon="route">
+    Error-handling paths lack cleanup that normal paths have.
+    
+    **Evidence required:** CFG or MCP analysis
+    
+    **PoC support:** Yes
+    
+    **Example:**
+    ```c
+    if (error) return -1;  // Early return skips explicit_bzero below
+    explicit_bzero(key, 32);
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Approved Zeroization APIs
+
+### C/C++
+
+<Tabs>
+  <Tab title="Recommended">
+    ```c
+    explicit_bzero(ptr, size);        // POSIX
+    memset_s(ptr, size, 0, size);     // C11
+    SecureZeroMemory(ptr, size);      // Windows
+    OPENSSL_cleanse(ptr, size);       // OpenSSL
+    sodium_memzero(ptr, size);        // libsodium
+    ```
+  </Tab>
+  
+  <Tab title="Volatile Loop (with barrier)">
+    ```c
+    volatile uint8_t *p = (volatile uint8_t *)ptr;
+    for (size_t i = 0; i < size; i++) {
+        p[i] = 0;
+    }
+    asm volatile("" ::: "memory");  // Compiler barrier
+    ```
+  </Tab>
+  
+  <Tab title="LLVM IR Evidence">
+    The plugin recognizes these patterns in IR:
+    - `llvm.memset` with volatile flag
+    - Volatile stores to secret locations
+    - Non-elidable wipe function calls
+  </Tab>
+</Tabs>
+
+### Rust
+
+```rust
+use zeroize::{Zeroize, Zeroizing, ZeroizeOnDrop};
+
+// Method 1: Explicit call
+let mut secret = vec![0u8; 32];
+// ... use secret ...
+secret.zeroize();
+
+// Method 2: Wrapper (drop-based)
+let secret = Zeroizing::new(vec![0u8; 32]);
+// Automatically zeroized on drop
+
+// Method 3: Derive macro
+#[derive(Zeroize, ZeroizeOnDrop)]
+struct SecretKey {
+    bytes: [u8; 32],
+}
+```
+
+## Usage Examples
+
+### C/C++ Analysis
+
+```json
+{
+  "path": ".",
+  "compile_db": "build/compile_commands.json",
+  "opt_levels": ["O0", "O1", "O2"],
+  "languages": ["c", "cpp"],
+  "enable_asm": true,
+  "enable_cfg": true
+}
+```
+
+### Rust Analysis
+
+```json
+{
+  "path": ".",
+  "cargo_manifest": "Cargo.toml",
+  "opt_levels": ["O0", "O2"],
+  "enable_asm": true
+}
+```
+
+### Mixed C/C++ + Rust
+
+```json
+{
+  "path": ".",
+  "compile_db": "build/compile_commands.json",
+  "cargo_manifest": "rust-components/Cargo.toml",
+  "opt_levels": ["O0", "O2"],
+  "mcp_mode": "prefer"
+}
+```
+
+## Confidence Gating
+
+### Evidence Requirements
+
+A finding requires **2+ independent signals** for `confirmed` confidence:
+
+<Steps>
+  <Step title="1 Signal">
+    Mark as `likely` - requires review
+  </Step>
+  
+  <Step title="2+ Signals">
+    Mark as `confirmed` - high confidence
+  </Step>
+  
+  <Step title="0 Strong Signals">
+    Mark as `needs_review` - name pattern only
+  </Step>
+</Steps>
+
+**Signals include:**
+- Name pattern match (e.g., `secret_key`, `password`)
+- Type hint match (e.g., `uint8_t key[32]`)
+- Explicit annotation or comment
+- IR evidence (wipe present at O0, absent at O2)
+- Assembly evidence (stack/register not cleared)
+- MCP cross-reference (semantic analysis)
+- CFG evidence (path analysis)
+- PoC validation (exploit proves vulnerability)
+
+### Hard Evidence Requirements
+
+<Warning>
+**These findings are NEVER valid without specified evidence:**
+
+- `OPTIMIZED_AWAY_ZEROIZE` - Requires IR diff
+- `STACK_RETENTION` - Requires assembly excerpt
+- `REGISTER_SPILL` - Requires assembly excerpt
+</Warning>
+
+### PoC Validation Impact
+
+| PoC Result | Verified | Impact |
+|------------|----------|--------|
+| Exit 0 (exploitable) | Yes | Upgrade `likely` → `confirmed` |
+| Exit 1 (not exploitable) | Yes | Downgrade to `low` severity |
+| Exit 0/1 | No (user accepted) | Weaker signal, note verification failure |
+| Exit 0/1 | No (user rejected) | No confidence change, mark `rejected` |
+| Compile failure | — | No confidence change, annotate |
+
+## Output Format
+
+Each run produces two outputs:
+
+### 1. final-report.md (Human-Readable)
+
+```markdown
+# Zeroize Audit Report
+
+Run ID: zeroize-audit-20240115-143022
+Timestamp: 2024-01-15 14:30:22
+
+## Executive Summary
+- Critical: 2
+- High: 5
+- Medium: 3
+- Low: 1
+
+## Findings
+
+### [ZA-0001] OPTIMIZED_AWAY_ZEROIZE (Critical, Confirmed)
+**Location:** src/crypto.c:42 (`key_buf`)
+
+**Evidence:**
+- O0: 32 volatile stores targeting key_buf
+- O2: 0 volatile stores (all eliminated)
+- Diff: Classic DSE pattern - all wipe stores removed
+
+**PoC:** generated_pocs/ZA-0001.c (validated: exploitable)
+
+**Fix:**
+```c
+explicit_bzero(key_buf, sizeof(key_buf));
+```
+```
+
+### 2. findings.json (Machine-Readable)
+
+```json
+{
+  "run_id": "zeroize-audit-20240115-143022",
+  "findings": [
+    {
+      "id": "ZA-0001",
+      "category": "OPTIMIZED_AWAY_ZEROIZE",
+      "severity": "critical",
+      "confidence": "confirmed",
+      "language": "c",
+      "file": "src/crypto.c",
+      "line": 42,
+      "symbol": "key_buf",
+      "evidence": "store volatile i8 0 count: O0=32, O2=0",
+      "compiler_evidence": {
+        "opt_levels": ["O0", "O2"],
+        "o0": "32 volatile stores targeting key_buf",
+        "o2": "0 volatile stores (all eliminated)"
+      },
+      "suggested_fix": "Replace memset with explicit_bzero",
+      "poc": {
+        "file": "generated_pocs/ZA-0001.c",
+        "validated": true,
+        "validation_result": "exploitable"
+      }
+    }
+  ]
+}
+```
+
+## Rust-Specific Analysis
+
+### Source Layer (Rustdoc JSON)
+
+**Detection patterns:**
+
+| Pattern | Category | Severity |
+|---------|----------|----------|
+| `#[derive(Copy)]` on sensitive type | `SECRET_COPY` | Critical |
+| No `Zeroize`/`ZeroizeOnDrop`/`Drop` impl | `MISSING_SOURCE_ZEROIZE` | High |
+| Partial `Drop` (not all fields zeroed) | `PARTIAL_WIPE` | High |
+| `mem::forget` / `ManuallyDrop::new` | `MISSING_SOURCE_ZEROIZE` | Critical |
+| `ptr::write_bytes` without `compiler_fence` | `OPTIMIZED_AWAY_ZEROIZE` | Medium |
+
+### MIR Layer
+
+**Detection patterns:**
+
+| Pattern | Category | Severity |
+|---------|----------|----------|
+| Drop glue without `call zeroize::` | `MISSING_SOURCE_ZEROIZE` | High |
+| `Yield` terminator with live secret local | `NOT_ON_ALL_PATHS` | High |
+| Secret moved into non-Zeroizing aggregate | `SECRET_COPY` | Medium |
+
+### LLVM IR Layer
+
+**Detection patterns:**
+
+| Pattern | Category | Severity |
+|---------|----------|----------|
+| `store volatile` count drops O0 → O2 | `OPTIMIZED_AWAY_ZEROIZE` | High |
+| `@llvm.memset` without volatile flag | `OPTIMIZED_AWAY_ZEROIZE` | High |
+| `alloca` present at O0, absent at O2 (SROA) | `OPTIMIZED_AWAY_ZEROIZE` | High |
+
+### Assembly Layer (Optional)
+
+**Corroboration patterns:**
+
+| Pattern | Category | Notes |
+|---------|----------|-------|
+| `subq $N, %rsp` with no zero-store before `retq` | `STACK_RETENTION` | x86-64 only |
+| `movq %reg, -N(%rsp)` (register spill) | `REGISTER_SPILL` | Caller-saved registers |
+| `drop_in_place::<T>` with no `call zeroize` | `MISSING_SOURCE_ZEROIZE` | Monomorphized instances |
+
+<Info>
+**AArch64 Support:** Experimental - findings require manual verification. The plugin uses `check_rust_asm_aarch64.py` for ARM64 analysis.
+</Info>
+
+## Direct Tool Usage
+
+### C/C++
+
+```bash
+# Extract compile flags for a source file
+FLAGS=($(python tools/extract_compile_flags.py \
+  --compile-db build/compile_commands.json \
+  --src src/crypto.c --format lines))
+
+# Emit LLVM IR at different optimization levels
+tools/emit_ir.sh --src src/crypto.c --out /tmp/crypto.O0.ll --opt O0 -- "${FLAGS[@]}"
+tools/emit_ir.sh --src src/crypto.c --out /tmp/crypto.O2.ll --opt O2 -- "${FLAGS[@]}"
+
+# Compare IR to detect optimized-away zeroization
+tools/diff_ir.sh /tmp/crypto.O0.ll /tmp/crypto.O2.ll
+
+# Emit and analyze assembly
+tools/emit_asm.sh --src src/crypto.c --out /tmp/crypto.O2.s --opt O2 -- "${FLAGS[@]}"
+tools/analyze_asm.sh --asm /tmp/crypto.O2.s --out /tmp/asm.json
+```
+
+### Rust
+
+```bash
+# Validate Rust toolchain
+tools/validate_rust_toolchain.sh --manifest Cargo.toml
+
+# Emit MIR
+tools/emit_rust_mir.sh --manifest Cargo.toml --opt O0 --out /tmp/crate.O0.mir
+tools/emit_rust_mir.sh --manifest Cargo.toml --opt O2 --out /tmp/crate.O2.mir
+
+# Compare MIR across optimization levels
+tools/diff_rust_mir.sh /tmp/crate.O0.mir /tmp/crate.O2.mir
+
+# Emit LLVM IR
+tools/emit_rust_ir.sh --manifest Cargo.toml --opt O0 --out /tmp/crate.O0.ll
+tools/emit_rust_ir.sh --manifest Cargo.toml --opt O2 --out /tmp/crate.O2.ll
+
+# Analyze source
+uv run tools/scripts/semantic_audit.py \
+  --rustdoc target/doc/mycrate.json \
+  --cargo-toml Cargo.toml --out findings.json
+
+# Analyze MIR patterns
+uv run tools/scripts/check_mir_patterns.py \
+  --mir /tmp/crate.mir \
+  --secrets sensitive-objects.json \
+  --out mir-findings.json
+
+# Analyze LLVM IR patterns
+uv run tools/scripts/check_llvm_patterns.py \
+  --o0 /tmp/crate.O0.ll \
+  --o2 /tmp/crate.O2.ll \
+  --out ir-findings.json
+
+# Emit and analyze assembly (optional)
+tools/emit_rust_asm.sh --manifest Cargo.toml --opt O2 --out /tmp/crate.O2.s
+uv run tools/scripts/check_rust_asm.py \
+  --asm /tmp/crate.O2.s \
+  --secrets sensitive-objects.json \
+  --out asm-findings.json
+```
+
+## Fix Recommendations
+
+Apply in order of preference:
+
+1. **Platform-specific secure APIs**
+   ```c
+   explicit_bzero(ptr, size);        // POSIX
+   SecureZeroMemory(ptr, size);      // Windows
+   ```
+
+2. **Crypto library APIs**
+   ```c
+   OPENSSL_cleanse(ptr, size);
+   sodium_memzero(ptr, size);
+   ```
+
+3. **C11 secure memset**
+   ```c
+   memset_s(ptr, size, 0, size);
+   ```
+
+4. **Volatile loop with barrier**
+   ```c
+   volatile uint8_t *p = ptr;
+   for (size_t i = 0; i < size; i++) p[i] = 0;
+   asm volatile("" ::: "memory");
+   ```
+
+5. **Rust zeroize crate**
+   ```rust
+   use zeroize::{Zeroize, ZeroizeOnDrop};
+   secret.zeroize();
+   ```
+
+## Rationalizations to Reject
+
+<Warning>
+The plugin rejects these common arguments:
+
+- **"The compiler won't optimize this away"** - Always verify with IR evidence
+- **"This is in a hot path"** - Benchmark first; security over premature optimization
+- **"Stack-allocated secrets are automatically cleaned"** - Stack frames may persist
+- **"memset is sufficient"** - Standard memset can be optimized away
+- **"We only handle this data briefly"** - Duration is irrelevant; always zeroize
+- **"This isn't a real secret"** - If it matches detection heuristics, audit it
+- **"We'll fix it later"** - Emit the finding now, don't defer
+</Warning>
+
+## Related Plugins
+
+- [Constant-Time Analysis](/plugins/constant-time-analysis) - Timing side-channel detection
+- [Property-Based Testing](/plugins/property-based-testing) - Test crypto invariants
+- [Testing Handbook Skills](/plugins/testing-handbook-skills) - Security testing patterns
+
+## References
+
+- Plugin reference documentation in `skills/zeroize-audit/references/`
+- Detection strategy guide: `references/detection-strategy.md`
+- MCP analysis guide: `references/mcp-analysis.md`
+- IR analysis guide: `references/ir-analysis.md`
+- PoC generation guide: `references/poc-generation.md`
+- Rust patterns guide: `references/rust-zeroization-patterns.md`
+
+<Note>
+**Author:** Trail of Bits
+
+**Version:** 0.1.0
+
+**MCP Integration:** Serena (optional, for C/C++ semantic analysis)
+</Note>

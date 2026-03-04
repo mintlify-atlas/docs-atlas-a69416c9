@@ -1,0 +1,271 @@
+---
+title: Sharp Edges
+description: Identify error-prone APIs, dangerous configurations, and footgun designs that enable security mistakes
+---
+
+The Sharp Edges plugin identifies error-prone APIs, dangerous configurations, and footgun designs that enable security mistakes through developer confusion, laziness, or malice.
+
+## Overview
+
+Sharp Edges analyzes code and designs through the lens of three adversaries:
+
+1. **The Scoundrel** - Can a malicious developer or attacker disable security via configuration?
+2. **The Lazy Developer** - Will copy-pasting the first example lead to insecure code?
+3. **The Confused Developer** - Can parameters be swapped without type errors?
+
+<Info>
+**Core Principle: The Pit of Success**
+
+Secure usage should be the path of least resistance. If developers must read documentation carefully or remember special rules to avoid vulnerabilities, the API has failed.
+</Info>
+
+## Installation
+
+```bash
+/plugin install trailofbits/skills/plugins/sharp-edges
+```
+
+## When to Use
+
+Use this plugin when:
+
+- Reviewing API designs for security-relevant interfaces
+- Auditing configuration schemas that expose security choices
+- Evaluating cryptographic library ergonomics
+- Assessing authentication/authorization APIs
+- Any code review where developers make security-critical decisions
+
+## Sharp Edge Categories
+
+The skill identifies six categories of misuse-prone designs:
+
+<AccordionGroup>
+  <Accordion title="1. Algorithm Selection Footguns">
+    APIs that let developers choose algorithms invite choosing wrong ones.
+
+    **The JWT Pattern** (canonical example):
+    - Header specifies algorithm: attacker can set `"alg": "none"` to bypass signatures
+    - Algorithm confusion: RSA public key used as HMAC secret when switching RS256→HS256
+    - Root cause: Letting untrusted input control security-critical decisions
+
+    **Example - PHP password_hash:**
+    ```php
+    // DANGEROUS: allows crc32, md5, sha1
+    password_hash($password, PASSWORD_DEFAULT); // Good - no choice
+    hash($algorithm, $password); // BAD: accepts "crc32"
+    ```
+  </Accordion>
+
+  <Accordion title="2. Dangerous Defaults">
+    Defaults that are insecure, or zero/empty values that disable security.
+
+    **Detection patterns:**
+    - Timeouts/lifetimes that accept 0 (infinite? immediate expiry?)
+    - Empty strings that bypass checks
+    - Null values that skip validation
+    - Boolean defaults that disable security features
+
+    **Questions to ask:**
+    - What happens with `timeout=0`? `max_attempts=0`? `key=""`?
+    - Is the default the most secure option?
+    - Can any default value disable security entirely?
+  </Accordion>
+
+  <Accordion title="3. Primitive vs. Semantic APIs">
+    APIs that expose raw bytes instead of meaningful types invite type confusion.
+
+    **The Libsodium vs. Halite Pattern:**
+    ```php
+    // Libsodium (primitives): bytes are bytes
+    sodium_crypto_box($message, $nonce, $keypair);
+    // Easy to: swap nonce/keypair, reuse nonces, use wrong key type
+
+    // Halite (semantic): types enforce correct usage
+    Crypto::seal($message, new EncryptionPublicKey($key));
+    // Wrong key type = type error, not silent failure
+    ```
+  </Accordion>
+
+  <Accordion title="4. Configuration Cliffs">
+    One wrong setting creates catastrophic failure, with no warning.
+
+    **Examples:**
+    ```yaml
+    # One typo = disaster
+    verify_ssl: fasle  # Typo silently accepted as truthy?
+
+    # Magic values
+    session_timeout: -1  # Does this mean "never expire"?
+
+    # Dangerous combinations accepted silently
+    auth_required: true
+    bypass_auth_for_health_checks: true
+    health_check_path: "/"  # Oops
+    ```
+  </Accordion>
+
+  <Accordion title="5. Silent Failures">
+    Errors that don't surface, or success that masks failure.
+
+    **Detection patterns:**
+    - Functions returning booleans instead of throwing on security failures
+    - Empty catch blocks around security operations
+    - Default values substituted on parse errors
+    - Verification functions that "succeed" on malformed input
+
+    **Example:**
+    ```python
+    # Silent bypass
+    def verify_signature(sig, data, key):
+        if not key:
+            return True  # No key = skip verification?!
+    ```
+  </Accordion>
+
+  <Accordion title="6. Stringly-Typed Security">
+    Security-critical values as plain strings enable injection and confusion.
+
+    **Detection patterns:**
+    - SQL/commands built from string concatenation
+    - Permissions as comma-separated strings
+    - Roles/scopes as arbitrary strings instead of enums
+    - URLs constructed by joining strings
+
+    **The permission accumulation footgun:**
+    ```python
+    permissions = "read,write"
+    permissions += ",admin"  # Too easy to escalate
+
+    # vs. type-safe
+    permissions = {Permission.READ, Permission.WRITE}
+    permissions.add(Permission.ADMIN)  # At least it's explicit
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Analysis Workflow
+
+### Phase 1: Surface Identification
+
+1. **Map security-relevant APIs**: authentication, authorization, cryptography, session management, input validation
+2. **Identify developer choice points**: Where can developers select algorithms, configure timeouts, choose modes?
+3. **Find configuration schemas**: Environment variables, config files, constructor parameters
+
+### Phase 2: Edge Case Probing
+
+For each choice point, ask:
+
+<CardGroup cols={2}>
+  <Card title="Zero/Empty/Null" icon="zero">
+    What happens with `0`, `""`, `null`, `[]`?
+  </Card>
+  <Card title="Negative Values" icon="minus">
+    What does `-1` mean? Infinite? Error?
+  </Card>
+  <Card title="Type Confusion" icon="shuffle">
+    Can different security concepts be swapped?
+  </Card>
+  <Card title="Default Values" icon="gear">
+    Is the default secure? Is it documented?
+  </Card>
+</CardGroup>
+
+### Phase 3: Threat Modeling
+
+Consider three adversaries:
+
+| Adversary | Threat Model |
+|-----------|--------------|
+| **The Scoundrel** | Actively malicious developer or attacker controlling config. Can they disable security via configuration? Can they downgrade algorithms? Can they inject malicious values? |
+| **The Lazy Developer** | Copy-pastes examples, skips documentation. Will the first example they find be secure? Is the path of least resistance secure? Do error messages guide toward secure usage? |
+| **The Confused Developer** | Misunderstands the API. Can they swap parameters without type errors? Can they use the wrong key/algorithm/mode by accident? Are failure modes obvious or silent? |
+
+### Phase 4: Validate Findings
+
+For each identified sharp edge:
+
+1. **Reproduce the misuse**: Write minimal code demonstrating the footgun
+2. **Verify exploitability**: Does the misuse create a real vulnerability?
+3. **Check documentation**: Is the danger documented?
+4. **Test mitigations**: Can the API be used safely with reasonable effort?
+
+## Severity Classification
+
+| Severity | Criteria | Examples |
+|----------|----------|----------|
+| **Critical** | Default or obvious usage is insecure | `verify: false` default; empty password allowed |
+| **High** | Easy misconfiguration breaks security | Algorithm parameter accepts "none" |
+| **Medium** | Unusual but possible misconfiguration | Negative timeout has unexpected meaning |
+| **Low** | Requires deliberate misuse | Obscure parameter combination |
+
+## Rationalizations to Reject
+
+<Warning>
+These shortcuts lead to missed findings. Do not accept them:
+
+| Rationalization | Why It's Wrong | Required Action |
+|-----------------|----------------|-----------------|
+| "It's documented" | Developers don't read docs under deadline pressure | Make the secure choice the default or only option |
+| "Advanced users need flexibility" | Flexibility creates footguns; most "advanced" usage is copy-paste | Provide safe high-level APIs; hide primitives |
+| "It's the developer's responsibility" | Blame-shifting; you designed the footgun | Remove the footgun or make it impossible to misuse |
+| "Nobody would actually do that" | Developers do everything imaginable under pressure | Assume maximum developer confusion |
+| "It's just a configuration option" | Config is code; wrong configs ship to production | Validate configs; reject dangerous combinations |
+</Warning>
+
+## Language-Specific Guides
+
+The plugin includes detailed language-specific footgun catalogs:
+
+<CardGroup cols={3}>
+  <Card title="C/C++" icon="c">
+    Memory safety, integer overflow, format strings
+  </Card>
+  <Card title="Go" icon="golang">
+    Error handling, crypto API misuse
+  </Card>
+  <Card title="Rust" icon="rust">
+    Unsafe blocks, FFI boundaries
+  </Card>
+  <Card title="Java/Kotlin" icon="java">
+    Serialization, crypto defaults
+  </Card>
+  <Card title="C#" icon="microsoft">
+    XML parsing, crypto modes
+  </Card>
+  <Card title="PHP" icon="php">
+    Type juggling, hash algorithms
+  </Card>
+  <Card title="JavaScript/TypeScript" icon="js">
+    `eval()`, prototype pollution
+  </Card>
+  <Card title="Python" icon="python">
+    `pickle`, YAML deserialize
+  </Card>
+  <Card title="Ruby" icon="gem">
+    `Marshal.load`, symbol DoS
+  </Card>
+</CardGroup>
+
+## Related Skills
+
+<CardGroup cols={2}>
+  <Card title="Constant-Time Analysis" href="/plugins/constant-time-analysis" icon="clock">
+    Detect timing side-channels in cryptographic code
+  </Card>
+  <Card title="Differential Review" href="/plugins/differential-review" icon="code-compare">
+    Security-focused code change review
+  </Card>
+</CardGroup>
+
+## Quality Checklist
+
+Before concluding analysis:
+
+- [ ] Probed all zero/empty/null edge cases
+- [ ] Verified defaults are secure
+- [ ] Checked for algorithm/mode selection footguns
+- [ ] Tested type confusion between security concepts
+- [ ] Considered all three adversary types
+- [ ] Verified error paths don't bypass security
+- [ ] Checked configuration validation
+- [ ] Constructor params validated (not just defaulted)

@@ -1,0 +1,257 @@
+---
+title: "Plugins"
+description: "Understanding the plugin architecture and structure"
+---
+
+## What are Plugins?
+
+Plugins are the fundamental packaging unit in Trail of Bits Skills. A plugin is a directory containing one or more of the following components:
+
+- **Skills** - Knowledge and guidance that Claude can invoke
+- **Commands** - Slash commands that trigger specific workflows
+- **Agents** - Autonomous agents that handle complex multi-step tasks
+- **Hooks** - Event listeners that intercept and modify tool execution
+
+<Note>
+Plugins can contain any combination of these components. A plugin might have only skills, only commands, or a mix of all four.
+</Note>
+
+## Plugin Structure
+
+```
+plugins/
+  <plugin-name>/
+    .claude-plugin/
+      plugin.json         # Plugin metadata (name, version, description, author)
+    commands/             # Optional: slash commands
+    agents/               # Optional: autonomous agents
+    skills/               # Optional: knowledge/guidance
+      <skill-name>/
+        SKILL.md          # Entry point with frontmatter
+        references/       # Optional: detailed docs
+        workflows/        # Optional: step-by-step guides
+        scripts/          # Optional: utility scripts
+    hooks/                # Optional: event hooks
+    README.md             # Plugin documentation
+```
+
+<Warning>
+Component directories (`skills/`, `commands/`, `agents/`, `hooks/`) must be at the plugin root, NOT inside `.claude-plugin/`. Only `plugin.json` belongs in `.claude-plugin/`.
+</Warning>
+
+## Plugin Metadata
+
+Every plugin must include a `plugin.json` file in the `.claude-plugin/` directory:
+
+```json .claude-plugin/plugin.json
+{
+  "name": "constant-time-analysis",
+  "version": "0.1.0",
+  "description": "Detect compiler-induced timing side-channels in cryptographic code",
+  "author": {
+    "name": "Scott Arciszewski",
+    "url": "https://github.com/trailofbits"
+  }
+}
+```
+
+### Required Fields
+
+<ParamField path="name" type="string" required>
+  Plugin name in kebab-case. Must be unique across the repository.
+</ParamField>
+
+<ParamField path="version" type="string" required>
+  Semantic version (e.g., "0.1.0"). Increment when making substantive changes - clients only update when version numbers increase.
+</ParamField>
+
+<ParamField path="description" type="string" required>
+  Brief description of what the plugin provides.
+</ParamField>
+
+<ParamField path="author" type="object" required>
+  Author information with `name` and optional `url` fields.
+</ParamField>
+
+## Plugin Examples by Complexity
+
+### Basic Plugin
+
+[ask-questions-if-underspecified](https://github.com/trailofbits/skills/tree/main/plugins/ask-questions-if-underspecified) - Minimal frontmatter, simple guidance
+
+**Structure:**
+- Single skill with straightforward workflow
+- No scripts or complex dependencies
+- Clear when-to-use guidance
+
+### Intermediate Plugin
+
+[constant-time-analysis](https://github.com/trailofbits/skills/tree/main/plugins/constant-time-analysis) - Python package, references/, language-specific docs
+
+**Structure:**
+- Skill with multiple reference files
+- Python scripts with PEP 723 inline metadata
+- Slash command integration
+- Language-specific guidance files
+
+### Advanced Plugin
+
+[culture-index](https://github.com/trailofbits/skills/tree/main/plugins/culture-index) - Scripts, workflows/, templates/, PDF extraction, multiple entry points
+
+**Structure:**
+- Complex skill with 10+ reference files
+- Multiple workflow files for different use cases
+- Python package with dependencies
+- Template files for report generation
+- Advanced PDF extraction scripts
+
+## Naming Conventions
+
+<AccordionGroup>
+  <Accordion title="Use kebab-case">
+    Always use kebab-case for plugin and component names:
+    - ✅ `constant-time-analysis`
+    - ❌ `constantTimeAnalysis`
+    - ❌ `constant_time_analysis`
+  </Accordion>
+
+  <Accordion title="Prefer gerund form">
+    Use verbs ending in -ing to describe actions:
+    - ✅ `analyzing-contracts`
+    - ✅ `processing-pdfs`
+    - ❌ `contract-analyzer`
+    - ❌ `pdf-processor`
+  </Accordion>
+
+  <Accordion title="Avoid vague names">
+    Be specific about what the plugin does:
+    - ❌ `helper`
+    - ❌ `utils`
+    - ❌ `tools`
+    - ❌ `misc`
+  </Accordion>
+
+  <Accordion title="Avoid reserved words">
+    Don't use brand names or reserved keywords:
+    - ❌ `anthropic`
+    - ❌ `claude`
+  </Accordion>
+</AccordionGroup>
+
+## Path Handling
+
+<Warning>
+Never hardcode absolute paths in plugin files. Always use `{baseDir}` for dynamic path resolution.
+</Warning>
+
+**Correct:**
+```markdown
+See the full guide at `{baseDir}/references/ADVANCED.md`
+```
+
+**Incorrect:**
+```markdown
+See the full guide at `/home/user/plugins/my-plugin/references/ADVANCED.md`
+```
+
+**Path conventions:**
+- Use forward slashes (`/`) even on Windows
+- Use `{baseDir}` for all paths to plugin resources
+- `{baseDir}` resolves to the plugin root directory at runtime
+
+## Development Workflow
+
+<Steps>
+  <Step title="Create plugin directory">
+    ```bash
+    mkdir -p plugins/my-plugin/.claude-plugin
+    ```
+  </Step>
+
+  <Step title="Add plugin.json">
+    Create `.claude-plugin/plugin.json` with metadata:
+    ```json
+    {
+      "name": "my-plugin",
+      "version": "0.1.0",
+      "description": "What your plugin does",
+      "author": {
+        "name": "Your Name",
+        "url": "https://github.com/yourusername"
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Add components">
+    Create one or more component directories:
+    - `skills/` for knowledge and guidance
+    - `commands/` for slash commands
+    - `agents/` for autonomous agents
+    - `hooks/` for event interception
+  </Step>
+
+  <Step title="Document the plugin">
+    Add a README.md explaining what the plugin does and how to use it.
+  </Step>
+</Steps>
+
+## Publishing and Distribution
+
+Plugins in the Trail of Bits Skills repository are registered in the root `.claude-plugin/marketplace.json`:
+
+```json
+{
+  "plugins": [
+    {
+      "name": "constant-time-analysis",
+      "version": "0.1.0",
+      "path": "plugins/constant-time-analysis"
+    }
+  ]
+}
+```
+
+<Note>
+Version numbers must match between the plugin's `plugin.json` and the root `marketplace.json`. Clients only download updates when version numbers increase.
+</Note>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Modular Design" icon="cubes">
+    Keep plugins focused on a single domain or task. Split large functionality across multiple plugins.
+  </Card>
+
+  <Card title="Progressive Disclosure" icon="layer-group">
+    Start with essential guidance in SKILL.md, link to detailed references for advanced users.
+  </Card>
+
+  <Card title="Clear Documentation" icon="book">
+    Include README.md with examples, use cases, and setup instructions.
+  </Card>
+
+  <Card title="Version Control" icon="code-branch">
+    Increment versions for substantive changes. Document breaking changes clearly.
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Skills" icon="brain" href="/concepts/skills">
+    Learn how to create knowledge and guidance for Claude
+  </Card>
+
+  <Card title="Commands" icon="terminal" href="/concepts/commands">
+    Create slash commands that trigger workflows
+  </Card>
+
+  <Card title="Agents" icon="robot" href="/concepts/agents">
+    Build autonomous agents for complex tasks
+  </Card>
+
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Build your first plugin in 5 minutes
+  </Card>
+</CardGroup>
